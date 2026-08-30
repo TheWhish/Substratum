@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Minecraft Test Run Environment
+run/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Visual Studio Code
+.vscode/
+
+# OS Specific
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+crash-reports/
+
+/TS.md
