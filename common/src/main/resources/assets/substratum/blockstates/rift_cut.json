@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,through=false": { "model": "substratum:block/rift_cut" },
+    "facing=south,through=false": { "model": "substratum:block/rift_cut" },
+    "facing=east,through=false": { "model": "substratum:block/rift_cut" },
+    "facing=west,through=false": { "model": "substratum:block/rift_cut" },
+    "facing=north,through=true": { "model": "substratum:block/rift_cut" },
+    "facing=south,through=true": { "model": "substratum:block/rift_cut" },
+    "facing=east,through=true": { "model": "substratum:block/rift_cut" },
+    "facing=west,through=true": { "model": "substratum:block/rift_cut" }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "xyz.thewhish.substratum.fabric.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "immptl.MixinIPModInfoChecking",
+    "immptl.MixinIPPortal",
+    "immptl.MixinIPServerPlayerGameMode"
+  ],
+  "client": [
+    "immptl.MixinIPBlockManipulationClient",
+    "immptl.MixinIPClientTeleportationManager",
+    "immptl.MixinIPCrossPortalSound",
+    "immptl.MixinIPModMainClient"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

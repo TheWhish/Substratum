@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "substratum:block/yellow_wallpaper_2"
+  }
+}

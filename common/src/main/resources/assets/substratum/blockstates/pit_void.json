@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": [
+      { "model": "substratum:block/pit_void", "weight": 1 }
+    ]
+  }
+}

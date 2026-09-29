@@ -3,10 +3,19 @@
 build/
 !gradle/wrapper/gradle-wrapper.jar
 
-# Minecraft Test Run Environment
-run/
+# Kotlin
+.kotlin/
 
-# IntelliJ IDEA
+# Architectury
+.architectury-transformer/
+
+# Minecraft dev runs
+run/
+logs/
+crash-reports/
+*.log
+
+# IntelliJ IDEA (shared run configurations live in .run/)
 .idea/
 *.iml
 *.ipr
@@ -16,12 +25,11 @@ out/
 # Visual Studio Code
 .vscode/
 
-# OS Specific
+# OS
 .DS_Store
 Thumbs.db
 
-# Log files
-*.log
-crash-reports/
-
-/TS.md
+# Local working material
+/docs/
+/tools/
+/README-modrinth.md

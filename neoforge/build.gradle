@@ -1,0 +1,80 @@
+plugins {
+    id "com.gradleup.shadow" version "9.6.1"
+}
+
+architectury {
+    platformSetupLoomIde()
+    neoForge()
+}
+
+configurations {
+    common {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentNeoForge.extendsFrom common
+
+    shadowBundle {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+}
+
+dependencies {
+    neoForge "net.neoforged:neoforge:${rootProject.neoforge_version}"
+    modApi "dev.architectury:architectury-neoforge:${rootProject.architectury_version}"
+    modImplementation "thedarkcolour:kotlinforforge-neoforge:${rootProject.kotlin_for_forge_version}"
+
+    forgeRuntimeLibrary "org.jetbrains.kotlin:kotlin-stdlib:${rootProject.kotlin_version}"
+    forgeRuntimeLibrary "org.jetbrains.kotlin:kotlin-reflect:${rootProject.kotlin_version}"
+
+    common(project(path: ":common", configuration: "namedElements")) { transitive = false }
+    shadowBundle project(path: ":common", configuration: "transformProductionNeoForge")
+}
+
+processResources {
+    inputs.properties rootProject.ext.modMetadata
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand rootProject.ext.modMetadata
+    }
+}
+
+// fml never scans build/classes/kotlin/main, so an @Mod written in kotlin silently never loads
+def entryPointCheck = tasks.register("neoforgeEntryPointCheck") {
+    group = "verification"
+    description = "Fails if a NeoForge annotation-scanned class ended up in the Kotlin output."
+    dependsOn tasks.named("classes")
+    def kotlinOutput = layout.buildDirectory.dir("classes/kotlin/main")
+    doLast {
+        def scanned = ["Lnet/neoforged/fml/common/Mod;", "Lnet/neoforged/fml/common/EventBusSubscriber;"]
+        def offenders = []
+        def dir = kotlinOutput.get().asFile
+        if (dir.exists()) {
+            dir.eachFileRecurse { file ->
+                if (file.isFile() && file.name.endsWith(".class")) {
+                    def constants = new String(file.bytes, "ISO-8859-1")
+                    if (scanned.any { constants.contains(it) }) offenders.add(file.name)
+                }
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException(
+                    "NeoForge annotation-scanned classes must be Java, not Kotlin — FML never sees " +
+                    "build/classes/kotlin/main. Move to neoforge/src/main/java: " + offenders.join(", "))
+        }
+    }
+}
+
+tasks.named("check") { dependsOn entryPointCheck }
+
+shadowJar {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    configurations.set([project.configurations.shadowBundle])
+    archiveClassifier = "dev-shadow"
+}
+
+remapJar {
+    inputFile.set shadowJar.archiveFile
+}

@@ -1,0 +1,33 @@
+{
+  "variants": {
+    "variant=0": { "model": "substratum:block/carpet_anomaly_soak_00" },
+    "variant=1": { "model": "substratum:block/carpet_anomaly_soak_10" },
+    "variant=2": { "model": "substratum:block/carpet_anomaly_soak_01" },
+    "variant=3": { "model": "substratum:block/carpet_anomaly_soak_11" },
+    "variant=4": { "model": "substratum:block/carpet_anomaly_spread_00" },
+    "variant=5": { "model": "substratum:block/carpet_anomaly_spread_10" },
+    "variant=6": { "model": "substratum:block/carpet_anomaly_spread_20" },
+    "variant=7": { "model": "substratum:block/carpet_anomaly_spread_01" },
+    "variant=8": { "model": "substratum:block/carpet_anomaly_spread_11" },
+    "variant=9": { "model": "substratum:block/carpet_anomaly_spread_21" },
+    "variant=10": { "model": "substratum:block/carpet_anomaly_spread_02" },
+    "variant=11": { "model": "substratum:block/carpet_anomaly_spread_12" },
+    "variant=12": { "model": "substratum:block/carpet_anomaly_spread_22" },
+    "variant=13": { "model": "substratum:block/carpet_anomaly_path_00" },
+    "variant=14": { "model": "substratum:block/carpet_anomaly_path_10" },
+    "variant=15": { "model": "substratum:block/carpet_anomaly_path_20" },
+    "variant=16": { "model": "substratum:block/carpet_anomaly_path_01" },
+    "variant=17": { "model": "substratum:block/carpet_anomaly_path_11" },
+    "variant=18": { "model": "substratum:block/carpet_anomaly_path_21" },
+    "variant=19": { "model": "substratum:block/carpet_anomaly_burn_00" },
+    "variant=20": { "model": "substratum:block/carpet_anomaly_burn_10" },
+    "variant=21": { "model": "substratum:block/carpet_anomaly_burn_01" },
+    "variant=22": { "model": "substratum:block/carpet_anomaly_burn_11" },
+    "variant=23": { "model": "substratum:block/carpet_anomaly_mildew_00" },
+    "variant=24": { "model": "substratum:block/carpet_anomaly_mildew_10" },
+    "variant=25": { "model": "substratum:block/carpet_anomaly_mildew_01" },
+    "variant=26": { "model": "substratum:block/carpet_anomaly_mildew_11" },
+    "variant=27": { "model": "substratum:block/carpet_anomaly_mildew_02" },
+    "variant=28": { "model": "substratum:block/carpet_anomaly_mildew_12" }
+  }
+}

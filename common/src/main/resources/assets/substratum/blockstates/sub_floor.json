@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": [
+      { "model": "substratum:block/sub_floor", "weight": 1 }
+    ]
+  }
+}

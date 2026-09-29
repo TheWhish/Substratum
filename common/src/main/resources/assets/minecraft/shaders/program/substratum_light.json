@@ -1,0 +1,18 @@
+{
+    "blend": { "func": "add", "srcrgb": "one", "dstrgb": "zero" },
+    "vertex": "substratum_screen",
+    "fragment": "substratum_light",
+    "samplers": [ { "name": "DepthSampler" } ],
+    "uniforms": [
+        { "name": "InSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+        { "name": "InvViewProj", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+        { "name": "Camera", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+        { "name": "TilesX", "type": "int", "count": 1, "values": [ 1 ] },
+        { "name": "FogStart", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "FogEnd", "type": "float", "count": 1, "values": [ 64.0 ] },
+        { "name": "Gain", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Shade", "type": "float", "count": 1, "values": [ 0.018 ] },
+        { "name": "LightVolume", "type": "int", "count": 1, "values": [ 11 ] },
+        { "name": "Tiles", "type": "int", "count": 1, "values": [ 9 ] }
+    ]
+}

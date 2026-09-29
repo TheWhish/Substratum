@@ -1,0 +1,23 @@
+{
+    "blend": { "func": "add", "srcrgb": "one", "dstrgb": "zero" },
+    "vertex": "substratum_screen",
+    "fragment": "substratum_atmosphere",
+    "samplers": [ { "name": "DiffuseSampler" }, { "name": "LightSampler" }, { "name": "DepthSampler" }, { "name": "BloomSampler" } ],
+    "uniforms": [
+        { "name": "InSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+        { "name": "Time", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Strength", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "Bloom", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "Shoulder", "type": "float", "count": 1, "values": [ 0.8 ] },
+        { "name": "Night", "type": "float", "count": 1, "values": [ 0.35 ] },
+        { "name": "Vignette", "type": "float", "count": 1, "values": [ 0.3 ] },
+        { "name": "Grain", "type": "float", "count": 1, "values": [ 0.035 ] },
+        { "name": "Aberration", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Ghost", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Tunnel", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Drain", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Lit", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Hands", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "Haze", "type": "float", "count": 1, "values": [ 0.0 ] }
+    ]
+}

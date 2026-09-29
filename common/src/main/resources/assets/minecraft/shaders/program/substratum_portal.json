@@ -1,0 +1,11 @@
+{
+    "blend": { "func": "add", "srcrgb": "one", "dstrgb": "zero" },
+    "vertex": "substratum_screen",
+    "fragment": "substratum_portal",
+    "samplers": [ { "name": "DiffuseSampler" }, { "name": "LightSampler" } ],
+    "uniforms": [
+        { "name": "Haze", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Strength", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "Shoulder", "type": "float", "count": 1, "values": [ 0.8 ] }
+    ]
+}

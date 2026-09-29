@@ -1,0 +1,21 @@
+{
+  "variants": {
+    "clean=false": [
+      { "model": "substratum:block/yellow_wallpaper_top_0", "weight": 100 },
+      { "model": "substratum:block/yellow_wallpaper_top_2", "weight": 100 },
+      { "model": "substratum:block/yellow_wallpaper_top_4", "weight": 100 },
+      { "model": "substratum:block/yellow_wallpaper_top_1", "weight": 5 },
+      { "model": "substratum:block/yellow_wallpaper_top_3", "weight": 5 },
+      { "model": "substratum:block/yellow_wallpaper_top_5", "weight": 26 },
+      { "model": "substratum:block/yellow_wallpaper_top_6", "weight": 18 },
+      { "model": "substratum:block/yellow_wallpaper_top_7", "weight": 14 },
+      { "model": "substratum:block/yellow_wallpaper_top_8", "weight": 8 },
+      { "model": "substratum:block/yellow_wallpaper_top_9", "weight": 5 }
+    ],
+    "clean=true": [
+      { "model": "substratum:block/yellow_wallpaper_top_0", "weight": 100 },
+      { "model": "substratum:block/yellow_wallpaper_top_2", "weight": 100 },
+      { "model": "substratum:block/yellow_wallpaper_top_4", "weight": 100 }
+    ]
+  }
+}

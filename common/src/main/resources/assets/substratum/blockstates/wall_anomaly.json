@@ -1,0 +1,33 @@
+{
+  "variants": {
+    "variant=0": { "model": "substratum:block/wall_anomaly_bleed_00" },
+    "variant=1": { "model": "substratum:block/wall_anomaly_bleed_10" },
+    "variant=2": { "model": "substratum:block/wall_anomaly_bleed_01" },
+    "variant=3": { "model": "substratum:block/wall_anomaly_bleed_11" },
+    "variant=4": { "model": "substratum:block/wall_anomaly_run_00" },
+    "variant=5": { "model": "substratum:block/wall_anomaly_run_01" },
+    "variant=6": { "model": "substratum:block/wall_anomaly_run_02" },
+    "variant=7": { "model": "substratum:block/wall_anomaly_cascade_00" },
+    "variant=8": { "model": "substratum:block/wall_anomaly_cascade_10" },
+    "variant=9": { "model": "substratum:block/wall_anomaly_cascade_20" },
+    "variant=10": { "model": "substratum:block/wall_anomaly_cascade_01" },
+    "variant=11": { "model": "substratum:block/wall_anomaly_cascade_11" },
+    "variant=12": { "model": "substratum:block/wall_anomaly_cascade_21" },
+    "variant=13": { "model": "substratum:block/wall_anomaly_bloom_00" },
+    "variant=14": { "model": "substratum:block/wall_anomaly_bloom_10" },
+    "variant=15": { "model": "substratum:block/wall_anomaly_bloom_01" },
+    "variant=16": { "model": "substratum:block/wall_anomaly_bloom_11" },
+    "variant=17": { "model": "substratum:block/wall_anomaly_creep_00" },
+    "variant=18": { "model": "substratum:block/wall_anomaly_creep_10" },
+    "variant=19": { "model": "substratum:block/wall_anomaly_creep_20" },
+    "variant=20": { "model": "substratum:block/wall_anomaly_peel_00" },
+    "variant=21": { "model": "substratum:block/wall_anomaly_peel_10" },
+    "variant=22": { "model": "substratum:block/wall_anomaly_peel_01" },
+    "variant=23": { "model": "substratum:block/wall_anomaly_peel_11" },
+    "variant=24": { "model": "substratum:block/wall_anomaly_gash_00" },
+    "variant=25": { "model": "substratum:block/wall_anomaly_gash_01" },
+    "variant=26": { "model": "substratum:block/wall_anomaly_rub_00" },
+    "variant=27": { "model": "substratum:block/wall_anomaly_rub_10" },
+    "variant=28": { "model": "substratum:block/wall_anomaly_rub_20" }
+  }
+}

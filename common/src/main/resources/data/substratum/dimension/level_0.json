@@ -1,0 +1,7 @@
+{
+  "type": "substratum:level_0",
+  "generator": {
+    "type": "substratum:maze",
+    "biome": "substratum:yellow_rooms"
+  }
+}

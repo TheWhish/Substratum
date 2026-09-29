@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "substratum:block/ceiling_tile",
+    "bottom": "substratum:block/ceiling_tile",
+    "side": "substratum:block/ceiling_edge"
+  }
+}

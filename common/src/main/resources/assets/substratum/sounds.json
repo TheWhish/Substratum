@@ -1,0 +1,30 @@
+{
+  "hum_60hz": {
+    "sounds": [
+      { "name": "substratum:ambient/hum_60hz", "volume": 0.25, "attenuation_distance": 16 }
+    ]
+  },
+  "lamp_buzz": {
+    "sounds": [
+      { "name": "substratum:block/lamp_buzz", "volume": 0.14, "attenuation_distance": 8 }
+    ]
+  },
+  "lamp_crackle": {
+    "subtitle": "subtitles.substratum.lamp_crackle",
+    "sounds": [
+      { "name": "substratum:block/lamp_crackle", "volume": 0.12, "attenuation_distance": 10 }
+    ]
+  },
+  "lamp_flicker": {
+    "subtitle": "subtitles.substratum.lamp_flicker",
+    "sounds": [
+      { "name": "substratum:block/lamp_flicker", "volume": 0.17, "attenuation_distance": 20 }
+    ]
+  },
+  "lamp_pop": {
+    "subtitle": "subtitles.substratum.lamp_pop",
+    "sounds": [
+      { "name": "substratum:block/lamp_pop", "volume": 0.9, "attenuation_distance": 24 }
+    ]
+  }
+}

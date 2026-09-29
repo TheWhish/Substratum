@@ -1,0 +1,21 @@
+{
+  "variants": {
+    "variant=0": { "model": "substratum:block/ceiling_anomaly_leak_00" },
+    "variant=1": { "model": "substratum:block/ceiling_anomaly_leak_10" },
+    "variant=2": { "model": "substratum:block/ceiling_anomaly_leak_01" },
+    "variant=3": { "model": "substratum:block/ceiling_anomaly_leak_11" },
+    "variant=4": { "model": "substratum:block/ceiling_anomaly_sag_00" },
+    "variant=5": { "model": "substratum:block/ceiling_anomaly_sag_10" },
+    "variant=6": { "model": "substratum:block/ceiling_anomaly_sag_01" },
+    "variant=7": { "model": "substratum:block/ceiling_anomaly_sag_11" },
+    "variant=8": { "model": "substratum:block/ceiling_anomaly_bloom_00" },
+    "variant=9": { "model": "substratum:block/ceiling_anomaly_bloom_10" },
+    "variant=10": { "model": "substratum:block/ceiling_anomaly_bloom_20" },
+    "variant=11": { "model": "substratum:block/ceiling_anomaly_bloom_01" },
+    "variant=12": { "model": "substratum:block/ceiling_anomaly_bloom_11" },
+    "variant=13": { "model": "substratum:block/ceiling_anomaly_bloom_21" },
+    "variant=14": { "model": "substratum:block/ceiling_anomaly_bloom_02" },
+    "variant=15": { "model": "substratum:block/ceiling_anomaly_bloom_12" },
+    "variant=16": { "model": "substratum:block/ceiling_anomaly_bloom_22" }
+  }
+}

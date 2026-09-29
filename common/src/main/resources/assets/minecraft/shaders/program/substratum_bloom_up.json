@@ -1,0 +1,10 @@
+{
+    "blend": { "func": "add", "srcrgb": "one", "dstrgb": "zero" },
+    "vertex": "substratum_screen",
+    "fragment": "substratum_bloom_up",
+    "samplers": [ { "name": "DiffuseSampler" }, { "name": "BaseSampler" } ],
+    "uniforms": [
+        { "name": "InSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+        { "name": "Scatter", "type": "float", "count": 1, "values": [ 0.65 ] }
+    ]
+}

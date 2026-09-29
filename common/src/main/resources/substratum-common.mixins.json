@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "xyz.thewhish.substratum.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "DeathLootMixin",
+    "FallDamageMixin",
+    "FallDistanceResetMixin",
+    "LevelZeroSightMixin",
+    "RespawnMixin",
+    "WorldDimensionsMixin"
+  ],
+  "client": [
+    "AtmosphereMixin",
+    "BackroomsLightMixin",
+    "EntityLightMixin",
+    "FogMixin",
+    "FovMixin",
+    "SkyBlackoutMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

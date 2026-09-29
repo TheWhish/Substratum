@@ -1,0 +1,46 @@
+architectury {
+    common((rootProject.enabled_platforms as String).split(","))
+}
+
+dependencies {
+    modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    modApi "dev.architectury:architectury:${rootProject.architectury_version}"
+
+    modCompileOnly "${rootProject.imm_ptl_dep}"
+    // do not drop: without fabric-api on the remap classpath immersive portals keeps intermediary
+    // names for methods it inherits through FabricBlockSettings and the dev client crashes on start
+    modCompileOnly "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+
+    testImplementation "org.jetbrains.kotlin:kotlin-stdlib:${rootProject.kotlin_version}"
+}
+
+def checks = [
+        mazeCheck    : "worldgen.MazeLayoutCheckKt",
+        slitCheck    : "rift.SlitGeometryCheckKt",
+        lampCheck    : "client.LampFlickerCheckKt",
+        burstCheck   : "level.LampBurstsCheckKt",
+        blackoutCheck: "level.BlackoutsCheckKt",
+        lightCheck   : "client.IrradianceCheckKt",
+]
+
+checks.each { name, main ->
+    tasks.register(name, JavaExec) {
+        group = "verification"
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = "xyz.thewhish.substratum.${main}"
+        workingDir = layout.buildDirectory.dir("checks")
+        doFirst { workingDir.mkdirs() }
+    }
+}
+
+tasks.register("shaderCheck", JavaExec) {
+    group = "verification"
+    description = "Compiles the Level 0 shaders with the local OpenGL driver."
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "xyz.thewhish.substratum.client.ShaderCheckKt"
+    args file("src/main/resources/assets/minecraft/shaders/program").absolutePath
+}
+
+tasks.named("check") { dependsOn checks.keySet() }
+
+tasks.named("test") { failOnNoDiscoveredTests = false }

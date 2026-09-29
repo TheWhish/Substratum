@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "variant=0": { "model": "substratum:block/shaft_fade_1" },
+    "variant=1": { "model": "substratum:block/shaft_fade_2" },
+    "variant=2": { "model": "substratum:block/shaft_fade_3" }
+  }
+}

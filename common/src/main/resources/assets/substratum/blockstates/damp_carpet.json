@@ -1,0 +1,22 @@
+{
+  "variants": {
+    "clean=false": [
+      { "model": "substratum:block/damp_carpet", "weight": 100 },
+      { "model": "substratum:block/damp_carpet_clean2", "weight": 100 },
+      { "model": "substratum:block/damp_carpet_clean3", "weight": 100 },
+      { "model": "substratum:block/damp_carpet_clean4", "weight": 100 },
+      { "model": "substratum:block/damp_carpet_1", "weight": 7 },
+      { "model": "substratum:block/damp_carpet_2", "weight": 4 },
+      { "model": "substratum:block/damp_carpet_3", "weight": 4 },
+      { "model": "substratum:block/damp_carpet_4", "weight": 2 },
+      { "model": "substratum:block/damp_carpet_wet", "weight": 2 },
+      { "model": "substratum:block/damp_carpet_mildew", "weight": 2 }
+    ],
+    "clean=true": [
+      { "model": "substratum:block/damp_carpet", "weight": 100 },
+      { "model": "substratum:block/damp_carpet_clean2", "weight": 100 },
+      { "model": "substratum:block/damp_carpet_clean3", "weight": 100 },
+      { "model": "substratum:block/damp_carpet_clean4", "weight": 100 }
+    ]
+  }
+}
