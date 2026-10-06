@@ -8,12 +8,14 @@ import net.minecraft.resources.ResourceKey
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
-import net.minecraft.world.level.ClipContext
+import net.minecraft.server.level.TicketType
+import net.minecraft.world.level.ChunkPos
 import net.minecraft.world.level.Level
-import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
 import xyz.thewhish.substratum.config.ServerConfig
+import xyz.thewhish.substratum.gaze.Watch
 import xyz.thewhish.substratum.level.SubstratumLevels
+import java.util.Comparator
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -27,8 +29,6 @@ object RiftSpawner {
 
     private const val SEEN_RADIUS = 64.0
 
-    private const val LOOK_COS_THRESHOLD = 0.77
-
     sealed interface SpawnResult {
         data object Opened : SpawnResult
         data object Elsewhere : SpawnResult
@@ -37,13 +37,14 @@ object RiftSpawner {
         data object CutFailed : SpawnResult
     }
 
+    private val FAR_SIDE_TICKET: TicketType<ChunkPos> =
+        TicketType.create("substratum_far_side", Comparator.comparingLong(ChunkPos::toLong), MAX_WAIT_TICKS.toInt())
+
     private class Pending(
         val outer: ResourceKey<Level>,
         val lower: BlockPos,
         val mouth: Direction,
-        val target: BlockPos,
-        val out: Direction,
-        val corridor: List<BlockPos>,
+        val plan: Crawlspace.Plan,
         val owner: UUID,
         val startTick: Long
     )
@@ -52,13 +53,7 @@ object RiftSpawner {
 
     fun register() {
         TickEvent.SERVER_POST.register(::tick)
-        LifecycleEvent.SERVER_STOPPING.register(::abandonAll)
-    }
-
-    private fun abandonAll(server: MinecraftServer) {
-        val entries = pending.values.toList()
-        pending.clear()
-        entries.forEach { abandon(server, it.corridor) }
+        LifecycleEvent.SERVER_STOPPING.register { pending.clear() }
     }
 
     private fun tick(server: MinecraftServer) {
@@ -83,15 +78,15 @@ object RiftSpawner {
     private fun fixAttempt(server: MinecraftServer, level: ServerLevel, player: ServerPlayer) {
         val candidate = RiftCandidates.pick(level, player, level.random) ?: return
         val maze = server.getLevel(SubstratumLevels.LEVEL_0) ?: return
-        val site = Crawlspace.openFresh(maze, candidate.mouth.axis, level.random, through = false) ?: return
-        pending[player.uuid] = Pending(
-            level.dimension(), candidate.lower, candidate.mouth, site.deadEnd, site.out, site.corridor(),
-            player.uuid, server.tickCount.toLong()
-        )
+        val plan = Crawlspace.planFresh(maze, candidate.mouth.axis, level.random) ?: return
+        val chunk = ChunkPos(plan.mouth)
+        maze.chunkSource.addRegionTicket(FAR_SIDE_TICKET, chunk, 1, chunk)
+        pending[player.uuid] = Pending(level.dimension(), candidate.lower, candidate.mouth, plan, player.uuid, server.tickCount.toLong())
     }
 
     private fun tickPending(server: MinecraftServer) {
         if (pending.isEmpty()) return
+        val maze = server.getLevel(SubstratumLevels.LEVEL_0) ?: return
         for (uuid in pending.keys.toList()) {
             val entry = pending[uuid] ?: continue
             val outer = server.getLevel(entry.outer)
@@ -100,52 +95,46 @@ object RiftSpawner {
                 RiftLifecycle.hasActiveEntrance(entry.owner) || server.tickCount - entry.startTick > MAX_WAIT_TICKS
             ) {
                 pending.remove(uuid)
-                abandon(server, entry.corridor)
                 continue
             }
+            if (!entry.plan.loaded(maze)) continue
             if (outer.chunkSource.getChunkNow(entry.lower.x shr 4, entry.lower.z shr 4) == null) continue
             if (!entry.lower.closerToCenterThan(owner.position(), RiftLifecycle.PRESENCE_RADIUS)) continue
-            if (isWatched(server, outer, entry.lower)) continue
+            if (isWatched(outer, entry.lower)) continue
             pending.remove(uuid)
+            val site = entry.plan.carve(maze, through = false) ?: continue
             if (!Rifts.cut(outer, entry.lower, entry.mouth, through = false)) {
-                abandon(server, entry.corridor)
+                abandon(maze, site)
                 continue
             }
-            RiftLifecycle.open(outer, PortalLink(entry.lower, entry.mouth, entry.target, entry.out), entry.corridor, entry.owner)
+            RiftLifecycle.open(outer, PortalLink(entry.lower, entry.mouth, site.deadEnd, site.out), site.corridor(), entry.owner)
         }
     }
 
-    private fun abandon(server: MinecraftServer, corridor: List<BlockPos>) {
-        val maze = server.getLevel(SubstratumLevels.LEVEL_0) ?: return
-        corridor.forEach { Rifts.close(maze, it) }
+    private fun abandon(maze: ServerLevel, site: Crawlspace.Site) {
+        site.corridor().forEach { Rifts.close(maze, it) }
     }
 
-    internal fun isWatched(server: MinecraftServer, level: ServerLevel, lower: BlockPos): Boolean {
-        val upper = lower.above()
+    internal fun isWatched(level: ServerLevel, lower: BlockPos): Boolean {
+        val ignoring = listOf(lower, lower.above())
         val center = Vec3(lower.x + 0.5, lower.y + 1.0, lower.z + 0.5)
-        return server.playerList.players.any { player ->
-            if (player.level() !== level) return@any false
-            val eye = player.eyePosition
-            val toTarget = center.subtract(eye)
-            val distanceSq = toTarget.lengthSqr()
-            if (distanceSq > SEEN_RADIUS * SEEN_RADIUS || distanceSq < 1.0e-6) return@any false
-            if (toTarget.normalize().dot(player.lookAngle) < LOOK_COS_THRESHOLD) return@any false
-            val hit = level.clip(ClipContext(eye, center, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-            hit.type == HitResult.Type.MISS || hit.blockPos == lower || hit.blockPos == upper
+        val gaze = Watch.gaze(level)
+        return gaze.viewers.any { viewer ->
+            viewer.eye.distanceToSqr(center) <= SEEN_RADIUS * SEEN_RADIUS && viewer.frames(center) && gaze.clearBlocks(viewer.eye, center, ignoring)
         }
     }
 
     fun forceSpawn(server: MinecraftServer, player: ServerPlayer): SpawnResult {
         val level = player.serverLevel()
         if (level.dimension() == SubstratumLevels.LEVEL_0) return SpawnResult.Elsewhere
-        pending.remove(player.uuid)?.let { abandon(server, it.corridor) }
+        pending.remove(player.uuid)
         RiftLifecycle.closeActiveEntrance(server, player.uuid)
         val candidate = RiftCandidates.pick(level, player, level.random) ?: return SpawnResult.NoCandidate
         val maze = server.getLevel(SubstratumLevels.LEVEL_0) ?: return SpawnResult.NoTarget
-        val site = Crawlspace.openFresh(maze, candidate.mouth.axis, level.random, through = false)
+        val site = Crawlspace.planFresh(maze, candidate.mouth.axis, level.random)?.carve(maze, through = false)
             ?: return SpawnResult.NoTarget
         if (!Rifts.cut(level, candidate.lower, candidate.mouth, through = false)) {
-            abandon(server, site.corridor())
+            abandon(maze, site)
             return SpawnResult.CutFailed
         }
         val link = PortalLink(candidate.lower, candidate.mouth, site.deadEnd, site.out)

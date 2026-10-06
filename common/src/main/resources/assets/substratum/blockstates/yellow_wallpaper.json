@@ -7,13 +7,13 @@
       { "model": "substratum:block/yellow_wallpaper_3", "weight": 100 },
       { "model": "substratum:block/yellow_wallpaper_4", "weight": 100 },
       { "model": "substratum:block/yellow_wallpaper_5", "weight": 100 },
+      { "model": "substratum:block/yellow_wallpaper_11", "weight": 4 },
+      { "model": "substratum:block/yellow_wallpaper_12", "weight": 3 },
       { "model": "substratum:block/yellow_wallpaper_6", "weight": 7 },
       { "model": "substratum:block/yellow_wallpaper_7", "weight": 5 },
       { "model": "substratum:block/yellow_wallpaper_8", "weight": 2 },
       { "model": "substratum:block/yellow_wallpaper_9", "weight": 5 },
       { "model": "substratum:block/yellow_wallpaper_10", "weight": 2 },
-      { "model": "substratum:block/yellow_wallpaper_11", "weight": 4 },
-      { "model": "substratum:block/yellow_wallpaper_12", "weight": 3 },
       { "model": "substratum:block/yellow_wallpaper_13", "weight": 4 }
     ],
     "clean=true": [
@@ -22,7 +22,9 @@
       { "model": "substratum:block/yellow_wallpaper_2", "weight": 100 },
       { "model": "substratum:block/yellow_wallpaper_3", "weight": 100 },
       { "model": "substratum:block/yellow_wallpaper_4", "weight": 100 },
-      { "model": "substratum:block/yellow_wallpaper_5", "weight": 100 }
+      { "model": "substratum:block/yellow_wallpaper_5", "weight": 100 },
+      { "model": "substratum:block/yellow_wallpaper_11", "weight": 4 },
+      { "model": "substratum:block/yellow_wallpaper_12", "weight": 3 }
     ]
   }
 }

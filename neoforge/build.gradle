@@ -41,7 +41,6 @@ processResources {
     }
 }
 
-// fml never scans build/classes/kotlin/main, so an @Mod written in kotlin silently never loads
 def entryPointCheck = tasks.register("neoforgeEntryPointCheck") {
     group = "verification"
     description = "Fails if a NeoForge annotation-scanned class ended up in the Kotlin output."

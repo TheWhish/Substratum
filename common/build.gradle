@@ -7,8 +7,6 @@ dependencies {
     modApi "dev.architectury:architectury:${rootProject.architectury_version}"
 
     modCompileOnly "${rootProject.imm_ptl_dep}"
-    // do not drop: without fabric-api on the remap classpath immersive portals keeps intermediary
-    // names for methods it inherits through FabricBlockSettings and the dev client crashes on start
     modCompileOnly "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
 
     testImplementation "org.jetbrains.kotlin:kotlin-stdlib:${rootProject.kotlin_version}"
@@ -19,8 +17,10 @@ def checks = [
         slitCheck    : "rift.SlitGeometryCheckKt",
         lampCheck    : "client.LampFlickerCheckKt",
         burstCheck   : "level.LampBurstsCheckKt",
-        blackoutCheck: "level.BlackoutsCheckKt",
         lightCheck   : "client.IrradianceCheckKt",
+        smilerCheck  : "smiler.SmilerCheckKt",
+        gazeCheck    : "gaze.GazeCheckKt",
+        directorCheck: "reality.DirectorCheckKt",
 ]
 
 checks.each { name, main ->

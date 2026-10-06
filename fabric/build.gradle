@@ -31,7 +31,6 @@ dependencies {
     modImplementation "${rootProject.imm_ptl_dep}"
     include "${rootProject.imm_ptl_dep}"
 
-    // dev runs only: loom does not unpack nested jars, these already ship inside immersive portals
     modLocalRuntime fileTree(dir: "${rootProject.projectDir}/libs/devruntime", include: "*.jar")
 
     common(project(path: ":common", configuration: "namedElements")) { transitive = false }

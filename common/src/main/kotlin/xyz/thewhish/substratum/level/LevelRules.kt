@@ -10,10 +10,13 @@ import dev.architectury.event.events.common.TickEvent
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.InteractionHand
 import net.minecraft.world.damagesource.DamageTypes
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.BucketItem
 import net.minecraft.world.level.GameRules
-import net.minecraft.world.level.Level
+import net.minecraft.world.level.block.state.BlockState
+import xyz.thewhish.substratum.registry.ModBlocks
 import java.util.UUID
 
 object LevelRules {
@@ -25,8 +28,13 @@ object LevelRules {
     private var reducedGlobal: Boolean? = null
 
     fun register() {
-        InteractionEvent.RIGHT_CLICK_BLOCK.register { player, _, _, _ ->
-            denyIn(BackroomsGuard.actualLevel(player.level()))
+        InteractionEvent.RIGHT_CLICK_BLOCK.register { player, hand, pos, _ ->
+            val level = BackroomsGuard.actualLevel(player.level())
+            if (level.isClientSide || level.dimension() != SubstratumLevels.LEVEL_0 || picksUp(player, hand, level.getBlockState(pos))) {
+                EventResult.pass()
+            } else {
+                EventResult.interruptFalse()
+            }
         }
         InteractionEvent.RIGHT_CLICK_ITEM.register { player, hand ->
             val stack = player.getItemInHand(hand)
@@ -37,7 +45,7 @@ object LevelRules {
             }
         }
         EntityEvent.LIVING_HURT.register { entity, source, _ ->
-            if (entity is ServerPlayer && source.`is`(DamageTypes.STARVE) && entity.level().dimension() == SubstratumLevels.LEVEL_0) {
+            if (entity is ServerPlayer && !source.`is`(DamageTypes.GENERIC_KILL) && entity.level().dimension() == SubstratumLevels.LEVEL_0) {
                 EventResult.interruptFalse()
             } else {
                 EventResult.pass()
@@ -76,10 +84,7 @@ object LevelRules {
         player.connection.send(ClientboundEntityEventPacket(player, if (wanted) REDUCED_DEBUG_ON else REDUCED_DEBUG_OFF))
     }
 
-    private fun denyIn(level: Level): EventResult =
-        if (!level.isClientSide && level.dimension() == SubstratumLevels.LEVEL_0) {
-            EventResult.interruptFalse()
-        } else {
-            EventResult.pass()
-        }
+    private fun picksUp(player: Player, hand: InteractionHand, state: BlockState): Boolean =
+        state.`is`(ModBlocks.ALMOND_WATER.get()) && hand == InteractionHand.MAIN_HAND && !player.isSpectator &&
+            !(player.isSecondaryUseActive && (!player.mainHandItem.isEmpty || !player.offhandItem.isEmpty))
 }

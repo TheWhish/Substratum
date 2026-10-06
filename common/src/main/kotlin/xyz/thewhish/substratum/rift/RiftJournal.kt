@@ -47,7 +47,6 @@ class RiftJournal private constructor(private val anchors: MutableSet<Pair<Resou
             val journal = of(server)
             if (!journal.anchors.add(dimension to pos.immutable())) return
             journal.setDirty()
-            // written right away: a crash before the next autosave would leave the wall cut forever
             server.overworld().dataStorage.save()
         }
 

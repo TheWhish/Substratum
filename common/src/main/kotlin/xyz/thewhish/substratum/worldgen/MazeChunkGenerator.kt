@@ -30,7 +30,8 @@ import java.util.stream.Stream
 class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSource(biome)) {
 
     @Volatile
-    private var layout = MazeLayout(0L)
+    var layout = MazeLayout(0L)
+        private set
 
     override fun createState(
         structureSets: HolderLookup<StructureSet>,
@@ -162,14 +163,15 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
                 val soak = layout.carpetAnomaly(x, z)
                 if (soak >= 0) return Palette.carpetAnomaly[soak]
             }
-            val clean = pitRoom || dirtThinned(layout, column, x, FLOOR_Y, z)
+            val clean = pitRoom || dirtThinned(layout, x, FLOOR_Y, z)
             return if (clean) Palette.dampCarpetClean else Palette.dampCarpet
         }
 
         val ceiling = MazeLayout.ceilingOf(column)
-        val ceilingClean = pitRoom || dirtThinned(layout, column, x, ceiling, z)
+        val ceilingClean = pitRoom || dirtThinned(layout, x, ceiling, z)
         val tile = if (ceilingClean) Palette.ceilingTileClean else Palette.ceilingTile
         if (!solid) {
+            if (y == FLOOR_Y + 1 && column and MazeLayout.PIT_ROOM == 0 && layout.almondWaterAt(x, z)) return Palette.almondWater
             if (y < ceiling) return Palette.air
             if (y == ceiling) {
                 if (column and MazeLayout.LAMP != 0) {
@@ -190,7 +192,7 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
         if (y == top) return tile
         val anomaly = layout.wallAnomaly(x, y, z, top)
         if (anomaly >= 0) return Palette.wallAnomaly[anomaly]
-        val clean = dirtThinned(layout, column, x, y, z)
+        val clean = dirtThinned(layout, x, y, z)
         return when (y) {
             top - 1 -> if (clean) Palette.wallpaperTopClean else Palette.wallpaperTop
             FLOOR_Y + 1 -> if (clean) Palette.wallpaperBottomClean else Palette.wallpaperBottom
@@ -198,11 +200,12 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
         }
     }
 
-    private fun dirtThinned(layout: MazeLayout, column: Int, x: Int, y: Int, z: Int): Boolean =
-        layout.dirtThinned(x, y, z, column and MazeLayout.DARK_ZONE != 0)
+    private fun dirtThinned(layout: MazeLayout, x: Int, y: Int, z: Int): Boolean =
+        layout.dirtThinned(x, y, z, layout.grimeAt(x, z))
 
     private object Palette {
         val air: BlockState = Blocks.AIR.defaultBlockState()
+        val almondWater: BlockState = ModBlocks.ALMOND_WATER.get().defaultBlockState()
         val abyssFloor: BlockState = ModBlocks.ABYSS_FLOOR.get().defaultBlockState()
         val subFloor: BlockState = ModBlocks.SUB_FLOOR.get().defaultBlockState()
         val dampCarpet: BlockState = ModBlocks.dampCarpet(clean = false)

@@ -88,7 +88,7 @@ object ExitSpawner {
                 pending.remove(uuid)
                 continue
             }
-            if (RiftSpawner.isWatched(server, maze, entry.plan.mouth)) continue
+            if (RiftSpawner.isWatched(maze, entry.plan.mouth)) continue
             val overworld = server.overworld()
             if (overworld.chunkSource.getChunkNow(entry.target.x shr 4, entry.target.z shr 4) == null) continue
             pending.remove(uuid)

@@ -33,7 +33,6 @@ object Rifts {
             val entity = level.getBlockEntity(pos) as? RiftCutBlockEntity ?: continue
             entity.setHost(host)
             level.sendBlockUpdated(pos, cut, cut, Block.UPDATE_ALL)
-            // setBlock already lit this against the stone placeholder, redo it with the real host
             level.lightEngine.checkBlock(pos)
         }
         return true
@@ -53,7 +52,6 @@ object Rifts {
         var pos = bottomOf(level, any)
         while (restored < MAX_HEIGHT) {
             val entity = level.getBlockEntity(pos) as? RiftCutBlockEntity ?: break
-            // read before setBlock, it drops the block entity together with the only copy of the host
             val host: BlockState = entity.host
             level.setBlock(pos, host, Block.UPDATE_ALL)
             restored++

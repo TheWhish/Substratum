@@ -8,7 +8,9 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.FogRenderer;
 import net.minecraft.util.Mth;
 import org.spongepowered.asm.mixin.Unique;
+import qouteall.imm_ptl.core.render.context_management.PortalRendering;
 import xyz.thewhish.substratum.client.DepthFog;
+import xyz.thewhish.substratum.client.ProbeView;
 import xyz.thewhish.substratum.client.ShaftDarkness;
 import xyz.thewhish.substratum.level.SubstratumLevels;
 import org.spongepowered.asm.mixin.Mixin;
@@ -32,6 +34,9 @@ abstract class FogMixin {
     @Unique
     private static final float DEEP_FOG_END = 1.75F;
 
+    @Unique
+    private static final float UNCULLED_FOG_ALPHA = 0.999F;
+
     @Inject(method = "setupFog", at = @At("RETURN"))
     private static void substratum$shaftFogDistance(
         Camera camera,
@@ -47,6 +52,8 @@ abstract class FogMixin {
             RenderSystem.setShaderFogStart(DepthFog.start(farPlaneDistance, partialTick));
             RenderSystem.setShaderFogEnd(DepthFog.end(farPlaneDistance, partialTick));
             RenderSystem.setShaderFogShape(FogShape.SPHERE);
+            float[] colour = RenderSystem.getShaderFogColor();
+            RenderSystem.setShaderFogColor(colour[0], colour[1], colour[2], UNCULLED_FOG_ALPHA);
         }
         double amount = ShaftDarkness.darkAmount(level, camera);
         if (amount > 0.0) {
@@ -57,6 +64,9 @@ abstract class FogMixin {
         }
         if (fogMode == FogRenderer.FogMode.FOG_TERRAIN && level != null && level.dimension() == SubstratumLevels.INSTANCE.getLEVEL_0()) {
             DepthFog.remember(RenderSystem.getShaderFogStart(), RenderSystem.getShaderFogEnd());
+        }
+        if (fogMode == FogRenderer.FogMode.FOG_TERRAIN && !PortalRendering.isRendering()) {
+            ProbeView.rememberFog(RenderSystem.getShaderFogEnd(), RenderSystem.getShaderFogShape());
         }
     }
 

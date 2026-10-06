@@ -24,7 +24,7 @@ const int TILE = 64;
 const int PER_TILE = 96;
 const float RANGE = 12.0;
 const float SPREAD = 3.0;
-const float REACH = 8.0;
+const float REACH = 9.0;
 const float SPILL = 0.8;
 const float LIFT = 0.5;
 const float FALLOFF = 0.5;
@@ -33,6 +33,7 @@ const float BULB = 0.35;
 const int MARCH = 12;
 const float OPEN = 0.03;
 const float FAINT = 0.0005;
+const float GLOW_FAINT = 0.00003;
 const vec3 VOLUME = vec3(256.0, 256.0, 16.0);
 
 float depthAt(ivec2 texel) {
@@ -168,9 +169,11 @@ void main() {
                 float amount = panel ? panelGlow(source, direction, from, to) : BULB * bulbGlow(source, direction, from, to);
                 float nearest = clamp(dot(source, direction), from, to);
                 float gap = max(length(direction * nearest - source) - LIFT, 0.0);
-                float reach = length(direction * nearest - lamp.xyz);
-                amount *= strength * exp(-FALLOFF * gap) * (1.0 - smoothstep(FogStart, FogEnd, nearest)) * (1.0 - smoothstep(REACH * 0.75, REACH, reach));
-                if (amount > 0.002) {
+                float edge = min(length(direction * nearest - lamp.xyz) / REACH, 1.0);
+                edge *= edge;
+                edge = 1.0 - edge * edge;
+                amount *= strength * exp(-FALLOFF * gap) * (1.0 - smoothstep(FogStart, FogEnd, nearest)) * edge * edge * edge;
+                if (amount > GLOW_FAINT) {
                     glow += amount * visible(direction * max(nearest - 0.15, 0.0), face);
                 }
             }

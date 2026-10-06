@@ -9,15 +9,13 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.minecraft.server.level.ServerPlayer
 import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.client.SanityClient
-import xyz.thewhish.substratum.sanity.SanityPhase
 
 object SanitySync {
 
-    private class Update(val phase: Int, val ticks: Int) : CustomPacketPayload {
-        constructor(buf: FriendlyByteBuf) : this(buf.readByte().toInt(), buf.readVarInt())
+    private class Update(val ticks: Int) : CustomPacketPayload {
+        constructor(buf: FriendlyByteBuf) : this(buf.readVarInt())
 
         fun write(buf: FriendlyByteBuf) {
-            buf.writeByte(phase)
             buf.writeVarInt(ticks)
         }
 
@@ -33,13 +31,12 @@ object SanitySync {
             return
         }
         NetworkManager.registerReceiver(NetworkManager.Side.S2C, TYPE, CODEC) { update, context ->
-            val phase = SanityPhase.entries.getOrNull(update.phase) ?: return@registerReceiver
             if (update.ticks < 0) return@registerReceiver
-            context.queue { SanityClient.accept(phase, update.ticks) }
+            context.queue { SanityClient.accept(update.ticks) }
         }
     }
 
     fun send(player: ServerPlayer, ticks: Int) {
-        NetworkManager.sendToPlayer(player, Update(SanityPhase.of(ticks).ordinal, ticks))
+        NetworkManager.sendToPlayer(player, Update(ticks))
     }
 }

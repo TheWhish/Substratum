@@ -36,7 +36,9 @@ object DepthFog {
     fun start(farPlane: Float, partialTick: Float): Float = end(farPlane, partialTick) * START
 
     @JvmStatic
-    fun end(farPlane: Float, partialTick: Float): Float = minOf(END * (1f - SanityEffects.closeIn(partialTick)), farPlane)
+    fun end(farPlane: Float, partialTick: Float): Float = minOf(haze(partialTick), farPlane)
+
+    fun haze(partialTick: Float): Float = END * (1f - SanityEffects.closeIn(partialTick))
 
     @JvmStatic
     fun colour(index: Int): Float {

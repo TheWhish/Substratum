@@ -10,19 +10,16 @@ import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.server.level.TicketType
 import net.minecraft.world.level.ChunkPos
-import net.minecraft.world.level.ClipContext
 import net.minecraft.world.level.Level
 import net.minecraft.world.phys.AABB
-import net.minecraft.world.phys.BlockHitResult
-import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
 import xyz.thewhish.substratum.config.ServerConfig
+import xyz.thewhish.substratum.gaze.Gaze
+import xyz.thewhish.substratum.gaze.Viewer
+import xyz.thewhish.substratum.gaze.Watch
 import xyz.thewhish.substratum.level.SubstratumLevels
-import xyz.thewhish.substratum.network.ViewportSync
 import java.util.Comparator
 import java.util.UUID
-import kotlin.math.abs
-import kotlin.math.atan2
 
 object RiftLifecycle {
 
@@ -48,12 +45,6 @@ object RiftLifecycle {
     internal const val PRESENCE_RADIUS = 64.0
 
     private const val ABANDON_TICKS = 200L
-
-    private const val CAMERA_DISTANCE = 4.0
-
-    private val WORLD_UP = Vec3(0.0, 1.0, 0.0)
-
-    private val SEEN_MARGIN = Math.toRadians(2.0)
 
     private val RIFT_TICKET: TicketType<BlockPos> =
         TicketType.create("substratum_rift", Comparator.comparingLong(BlockPos::asLong))
@@ -100,6 +91,8 @@ object RiftLifecycle {
         outer.server.getLevel(targetDimension)?.chunkSource
             ?.addRegionTicket(RIFT_TICKET, ChunkPos(link.target), TICKET_RADIUS, link.target)
     }
+
+    fun mazeCuts(): List<BlockPos> = active.values.flatMap { it.corridor }
 
     fun hasActiveExit(owner: UUID): Boolean =
         active.values.any { it.owner == owner && it.targetDimension != SubstratumLevels.LEVEL_0 }
@@ -163,44 +156,6 @@ object RiftLifecycle {
         fullClose(server, entry)
     }
 
-    private class ViewBasis(val forward: Vec3, val right: Vec3, val up: Vec3) {
-        companion object {
-            fun of(forward: Vec3): ViewBasis {
-                var right = forward.cross(WORLD_UP)
-                if (right.lengthSqr() < 1.0e-6) right = Vec3(1.0, 0.0, 0.0)
-                right = right.normalize()
-                return ViewBasis(forward, right, right.cross(forward).normalize())
-            }
-        }
-
-        fun angles(eye: Vec3, point: Vec3): Pair<Double, Double>? {
-            val toPoint = point.subtract(eye)
-            val forwardComp = toPoint.dot(forward)
-            if (forwardComp <= 0.0) return null
-            return atan2(abs(toPoint.dot(right)), forwardComp) to atan2(abs(toPoint.dot(up)), forwardComp)
-        }
-    }
-
-    private class CameraView(val eye: Vec3, val forward: Vec3)
-
-    private fun cameraView(player: ServerPlayer, level: ServerLevel): CameraView {
-        val lookAngle = player.lookAngle
-        val eye = player.eyePosition
-        return when (ViewportSync.of(player).perspective) {
-            ViewportSync.Perspective.FIRST_PERSON -> CameraView(eye, lookAngle)
-            ViewportSync.Perspective.THIRD_PERSON_BACK ->
-                CameraView(pullCamera(level, player, eye, lookAngle.scale(-1.0)), lookAngle)
-            ViewportSync.Perspective.THIRD_PERSON_FRONT ->
-                CameraView(pullCamera(level, player, eye, lookAngle), lookAngle.scale(-1.0))
-        }
-    }
-
-    private fun pullCamera(level: ServerLevel, player: ServerPlayer, eye: Vec3, direction: Vec3): Vec3 {
-        val desired = eye.add(direction.scale(CAMERA_DISTANCE))
-        val hit = level.clip(ClipContext(eye, desired, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
-        return if (hit.type == HitResult.Type.MISS) desired else hit.location
-    }
-
     private fun boxCorners(box: AABB): List<Vec3> = listOf(
         Vec3(box.minX, box.minY, box.minZ), Vec3(box.minX, box.minY, box.maxZ),
         Vec3(box.minX, box.maxY, box.minZ), Vec3(box.minX, box.maxY, box.maxZ),
@@ -216,31 +171,19 @@ object RiftLifecycle {
         viewNormal: Vec3
     ): Boolean {
         if (player.level() !== level) return false
-        if (player.eyePosition.distanceToSqr(box.center) > (SEEN_RADIUS + CAMERA_DISTANCE).let { it * it }) return false
-        val camera = cameraView(player, level)
-        val eye = camera.eye
+        if (player.eyePosition.distanceToSqr(box.center) > (SEEN_RADIUS + Viewer.CAMERA_DISTANCE).let { it * it }) return false
+        val gaze = Watch.gaze(level)
+        val viewer = gaze.viewer(player.uuid) ?: return false
+        val eye = viewer.eye
         val center = box.center
         val toCenter = center.subtract(eye)
         val distanceSq = toCenter.lengthSqr()
         if (distanceSq > SEEN_RADIUS * SEEN_RADIUS || distanceSq < 1.0e-6) return false
         if (toCenter.dot(viewNormal) >= 0.0) return false
 
-        val basis = ViewBasis.of(camera.forward)
-        val viewport = ViewportSync.of(player)
-        val framed = (boxCorners(box) + center).any { point ->
-            val (horizontal, vertical) = basis.angles(eye, point) ?: return@any false
-            horizontal <= viewport.halfHFov + SEEN_MARGIN && vertical <= viewport.halfVFov + SEEN_MARGIN
-        }
-        if (!framed) return false
+        if ((boxCorners(box) + center).none { viewer.frames(it) }) return false
 
-        return hasAnyClearView(level, player, eye, basis.right, box, viewNormal, ignoring)
-    }
-
-    private fun hasClearView(level: ServerLevel, viewer: ServerPlayer, from: Vec3, to: Vec3, ignoring: List<BlockPos>): Boolean {
-        val context = ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, viewer)
-        val hit = level.clip(context)
-        if (hit.type == HitResult.Type.MISS) return true
-        return hit is BlockHitResult && hit.blockPos in ignoring
+        return hasAnyClearView(gaze, eye, viewer.right, box, viewNormal, ignoring)
     }
 
     private const val SAMPLE_INSET = 0.03
@@ -266,8 +209,7 @@ object RiftLifecycle {
     private const val EYE_PEEK = 0.3
 
     private fun hasAnyClearView(
-        level: ServerLevel,
-        viewer: ServerPlayer,
+        gaze: Gaze,
         eye: Vec3,
         right: Vec3,
         box: AABB,
@@ -276,7 +218,7 @@ object RiftLifecycle {
     ): Boolean {
         val eyes = listOf(eye, eye.add(right.scale(EYE_PEEK)), eye.add(right.scale(-EYE_PEEK)))
         val targets = sightSamples(box, viewNormal)
-        return eyes.any { from -> targets.any { to -> hasClearView(level, viewer, from, to, ignoring) } }
+        return eyes.any { from -> targets.any { to -> gaze.clearBlocks(from, to, ignoring) } }
     }
 
     private fun direction(face: Direction): Vec3 =

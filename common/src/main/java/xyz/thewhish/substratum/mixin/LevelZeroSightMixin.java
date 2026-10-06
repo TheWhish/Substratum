@@ -13,7 +13,7 @@ import xyz.thewhish.substratum.level.SubstratumLevels;
 abstract class LevelZeroSightMixin {
 
     @Unique
-    private static final int SIGHT_MARGIN = 1;
+    private static final int SIGHT_MARGIN = 2;
 
     @ModifyVariable(method = "foreachBaseChunkLoaders", at = @At("HEAD"), argsOnly = true, name = "func")
     private static Consumer<ChunkLoader> substratum$limitLevelZero(Consumer<ChunkLoader> consumer) {

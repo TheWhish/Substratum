@@ -7,7 +7,6 @@ import net.minecraft.client.resources.sounds.SoundInstance
 import net.minecraft.core.BlockPos
 import net.minecraft.sounds.SoundEvent
 import net.minecraft.sounds.SoundSource
-import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.phys.Vec3
 import xyz.thewhish.substratum.registry.ModBlocks
 import xyz.thewhish.substratum.registry.ModBlocks.LampCondition
@@ -50,21 +49,23 @@ object LampHum {
         emitters.clear()
     }
 
-    private fun tone(state: BlockState): Tone? {
+    private fun tone(level: ClientLevel, pos: BlockPos): Tone? {
+        val state = level.getBlockState(pos)
         if (!state.`is`(ModBlocks.lampBlock)) return null
         return when (state.getValue(ModBlocks.LAMP_CONDITION)) {
-            LampCondition.ON, LampCondition.FLICKERING, LampCondition.FLICKERING_OFF -> Tone.MAINS
+            LampCondition.ON, LampCondition.FLICKERING -> Tone.MAINS
             LampCondition.DIM -> Tone.DIM
-            else -> null
+            LampCondition.DEAD -> if (LampFlicker.isOff(pos)) Tone.MAINS else null
         }
     }
 
     private fun nearestLamps(level: ClientLevel, eye: Vec3): Map<BlockPos, Tone> {
         val center = BlockPos.containing(eye)
-        return scanBlocks(level, center, RANGE) { tone(it) != null }
-            .sortedBy { it.distSqr(center) }
+        return scanBlocks(level, center, RANGE) { it.`is`(ModBlocks.lampBlock) }
+            .mapNotNull { pos -> tone(level, pos)?.let { pos to it } }
+            .sortedBy { it.first.distSqr(center) }
             .take(MAX_EMITTERS)
-            .associateWith { tone(level.getBlockState(it))!! }
+            .toMap()
     }
 
     private fun sound(tone: Tone): SoundEvent = when (tone) {
@@ -90,22 +91,21 @@ object LampHum {
         override fun canStartSilent(): Boolean = true
 
         override fun tick() {
-            val state = Minecraft.getInstance().level?.getBlockState(pos)
-            if (keep && (state == null || tone(state) != tone)) keep = false
+            val level = Minecraft.getInstance().level ?: return stop()
+            val silent = LampFlicker.isOff(pos)
+            if (tone(level, pos) != tone || (silent && !keep)) return stop()
+            if (silent) {
+                volume = 0f
+                cut = true
+                return
+            }
             if (!keep) {
                 volume -= 1f / FADE_TICKS
                 if (volume <= 0f) stop()
                 return
             }
-            if (state?.getValue(ModBlocks.LAMP_CONDITION)?.lit != true) {
-                volume = 0f
-                cut = true
-            } else if (cut) {
-                volume = 1f
-                cut = false
-            } else {
-                volume = (volume + 1f / FADE_TICKS).coerceAtMost(1f)
-            }
+            volume = if (cut) 1f else (volume + 1f / FADE_TICKS).coerceAtMost(1f)
+            cut = false
         }
     }
 }

@@ -24,7 +24,13 @@
   "lamp_pop": {
     "subtitle": "subtitles.substratum.lamp_pop",
     "sounds": [
-      { "name": "substratum:block/lamp_pop", "volume": 0.9, "attenuation_distance": 24 }
+      { "name": "substratum:block/lamp_pop", "volume": 1.0, "attenuation_distance": 48 }
+    ]
+  },
+  "vhs_burst": {
+    "subtitle": "subtitles.substratum.vhs_burst",
+    "sounds": [
+      { "name": "substratum:ambient/vhs_burst", "volume": 1.0, "attenuation_distance": 32 }
     ]
   }
 }

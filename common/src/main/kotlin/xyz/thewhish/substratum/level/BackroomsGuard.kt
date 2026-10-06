@@ -32,15 +32,13 @@ object BackroomsGuard {
         }
     }
 
-    private fun resyncRemoteWatchersAfterCrossPortalEdit(level: Level, pos: BlockPos) {
+    fun resyncRemoteWatchersAfterCrossPortalEdit(level: Level, pos: BlockPos) {
         if (level.isClientSide || level !is ServerLevel) return
         if (BlockManipulationServer.REDIRECT_CONTEXT.get() == null) return
         val target = pos.immutable()
         level.server.execute { PortalAPI.syncBlockUpdateToClientImmediately(level, IntBox(target, target)) }
     }
 
-    // reaching through a portal redirects the level only inside immersive portals' own mixins,
-    // so events can still see the dimension the player stands in
     fun actualLevel(level: Level): Level =
         BlockManipulationServer.REDIRECT_CONTEXT.get()?.world() ?: level
 

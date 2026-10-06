@@ -7,6 +7,7 @@ import net.minecraft.network.codec.StreamCodec
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.minecraft.server.level.ServerPlayer
 import xyz.thewhish.substratum.Substratum
+import xyz.thewhish.substratum.level.SubstratumLevels
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.atan
@@ -16,54 +17,75 @@ object ViewportSync {
 
     enum class Perspective { FIRST_PERSON, THIRD_PERSON_BACK, THIRD_PERSON_FRONT }
 
-    data class Viewport(val vFovDegrees: Float, val aspect: Float, val perspective: Perspective) {
+    data class Viewport(val vFovDegrees: Float, val aspect: Float, val perspective: Perspective, val haze: Float = MAX_HAZE) {
         val halfVFov: Double get() = Math.toRadians(vFovDegrees / 2.0)
 
         val halfHFov: Double get() = atan(tan(halfVFov) * aspect)
     }
 
+    const val MAX_HAZE = SubstratumLevels.SIGHT_CHUNKS * 16f
+    const val MEMORY_MS = 500L
     val DEFAULT = Viewport(70f, 16f / 9f, Perspective.FIRST_PERSON)
 
-    private const val MIN_FOV = 30f
-    private const val MAX_FOV = 110f
+    private const val MIN_FOV = 1f
+    private const val MAX_FOV = 179f
     private const val MIN_ASPECT = 0.25f
     private const val MAX_ASPECT = 8f
+    private const val MIN_HAZE = 1f
 
-    private class Report(val vFovDegrees: Float, val aspect: Float, val perspective: Perspective) : CustomPacketPayload {
-        constructor(buf: FriendlyByteBuf) : this(buf.readFloat(), buf.readFloat(), buf.readEnum(Perspective::class.java))
+    private class Report(val vFovDegrees: Float, val aspect: Float, val perspective: Perspective, val haze: Float) : CustomPacketPayload {
+        constructor(buf: FriendlyByteBuf) : this(buf.readFloat(), buf.readFloat(), buf.readEnum(Perspective::class.java), buf.readFloat())
 
         fun write(buf: FriendlyByteBuf) {
             buf.writeFloat(vFovDegrees)
             buf.writeFloat(aspect)
             buf.writeEnum(perspective)
+            buf.writeFloat(haze)
         }
 
         override fun type(): CustomPacketPayload.Type<Report> = TYPE
     }
 
+    class Seen(val since: Long, val viewport: Viewport)
+
     private val TYPE = CustomPacketPayload.Type<Report>(Substratum.id("viewport"))
     private val CODEC: StreamCodec<FriendlyByteBuf, Report> = CustomPacketPayload.codec(Report::write, ::Report)
 
-    private val reported = ConcurrentHashMap<UUID, Viewport>()
+    private val reported = ConcurrentHashMap<UUID, List<Seen>>()
 
     fun register() {
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, TYPE, CODEC, ::accept)
         PlayerEvent.PLAYER_QUIT.register { reported.remove(it.uuid) }
     }
 
-    fun of(player: ServerPlayer): Viewport = reported[player.uuid] ?: DEFAULT
+    fun of(player: ServerPlayer): Viewport = widest(reported[player.uuid] ?: return DEFAULT, System.currentTimeMillis())
 
-    fun report(vFovDegrees: Float, aspect: Float, perspective: Perspective) {
-        NetworkManager.sendToServer(Report(vFovDegrees, aspect, perspective))
+    fun report(vFovDegrees: Float, aspect: Float, perspective: Perspective, haze: Float) {
+        NetworkManager.sendToServer(Report(vFovDegrees, aspect, perspective, haze))
     }
+
+    fun widest(history: List<Seen>, now: Long): Viewport {
+        val recent = recent(history, now)
+        return recent.last().viewport.copy(
+            vFovDegrees = recent.maxOf { it.viewport.vFovDegrees },
+            aspect = recent.maxOf { it.viewport.aspect },
+            haze = recent.maxOf { it.viewport.haze },
+        )
+    }
+
+    fun recent(history: List<Seen>, now: Long): List<Seen> =
+        history.filterIndexed { i, _ -> i == history.lastIndex || history[i + 1].since >= now - MEMORY_MS }
 
     private fun accept(report: Report, context: NetworkManager.PacketContext) {
         val player = context.player as? ServerPlayer ?: return
-        if (!report.vFovDegrees.isFinite() || !report.aspect.isFinite()) return
-        reported[player.uuid] = Viewport(
+        if (!report.vFovDegrees.isFinite() || !report.aspect.isFinite() || !report.haze.isFinite()) return
+        val now = System.currentTimeMillis()
+        val viewport = Viewport(
             report.vFovDegrees.coerceIn(MIN_FOV, MAX_FOV),
             report.aspect.coerceIn(MIN_ASPECT, MAX_ASPECT),
-            report.perspective
+            report.perspective,
+            report.haze.coerceIn(MIN_HAZE, MAX_HAZE),
         )
+        reported.compute(player.uuid) { _, history -> recent((history ?: emptyList()) + Seen(now, viewport), now) }
     }
 }

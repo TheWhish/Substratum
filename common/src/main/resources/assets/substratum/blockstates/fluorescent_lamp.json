@@ -1,11 +1,8 @@
 {
   "variants": {
     "condition=on": { "model": "substratum:block/fluorescent_lamp" },
-    "condition=dim": { "model": "substratum:block/fluorescent_lamp_dim" },
     "condition=flickering": { "model": "substratum:block/fluorescent_lamp" },
-    "condition=flickering_off": { "model": "substratum:block/fluorescent_lamp_dead" },
-    "condition=dead": { "model": "substratum:block/fluorescent_lamp_dead" },
-    "condition=out": { "model": "substratum:block/fluorescent_lamp_dead" },
-    "condition=broken": { "model": "substratum:block/fluorescent_lamp_broken" }
+    "condition=dim": { "model": "substratum:block/fluorescent_lamp_dim" },
+    "condition=dead": { "model": "substratum:block/fluorescent_lamp_dead" }
   }
 }

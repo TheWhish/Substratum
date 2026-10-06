@@ -1,13 +1,12 @@
 package xyz.thewhish.substratum.level
 
-import xyz.thewhish.substratum.sanity.SanityPhase
 import kotlin.random.Random
 
 private const val RUNS = 2000
 private const val MINUTE = 1200.0
 
-private fun meanMinutes(ticks: Int, random: Random): Double {
-    val chance = LampBursts.CHECK_INTERVAL * LampBursts.rate(ticks)
+private fun meanMinutes(pressure: Double, random: Random): Double {
+    val chance = LampBursts.CHECK_INTERVAL * LampBursts.rate(pressure)
     var total = 0L
     repeat(RUNS) {
         var waited = LampBursts.PLAYER_COOLDOWN
@@ -19,16 +18,13 @@ private fun meanMinutes(ticks: Int, random: Random): Double {
 
 fun main() {
     val random = Random(7)
-    val disorientation = SanityPhase.DISORIENTATION.startTick
-    val hunt = SanityPhase.HUNT.startTick
-    val quiet = meanMinutes(0, random)
-    val lateDisorientation = meanMinutes(hunt - 1, random)
-    val hunting = meanMinutes(hunt, random)
-    val rates = (disorientation until hunt step 200).map(LampBursts::rate)
-    check(rates.zipWithNext().all { (a, b) -> b >= a }) { "burst rate must not fall during disorientation" }
-    check(LampBursts.rate(disorientation) == LampBursts.rate(0)) { "disorientation must start at the quiet rate" }
+    val quiet = meanMinutes(0.0, random)
+    val half = meanMinutes(0.5, random)
+    val full = meanMinutes(1.0, random)
+    val rates = (0..20).map { LampBursts.rate(it / 20.0) }
+    check(rates.zipWithNext().all { (a, b) -> b > a }) { "burst rate must grow with pressure" }
     check(quiet in 9.0..11.5) { "quiet interval %.2f min is off the ~10 min target".format(quiet) }
-    check(lateDisorientation in 3.5..4.5) { "late disorientation interval %.2f min is off the ~4 min target".format(lateDisorientation) }
-    check(hunting in 2.0..2.5) { "hunt interval %.2f min is off the ~2.25 min target".format(hunting) }
-    println("lamp bursts: quiet %.2f min, end of disorientation %.2f min, hunt %.2f min".format(quiet, lateDisorientation, hunting))
+    check(half in 5.5..7.0) { "half pressure interval %.2f min is off the ~6 min target".format(half) }
+    check(full in 2.0..2.5) { "full pressure interval %.2f min is off the ~2.25 min target".format(full) }
+    println("lamp bursts: p 0 %.2f min, p 0.5 %.2f min, p 1 %.2f min".format(quiet, half, full))
 }

@@ -19,6 +19,8 @@ fun main(args: Array<String>) {
         checkShape(layout, seed, tally)
         countCorridorDetail(layout, tally)
         countAnomalies(layout, tally)
+        checkAlmondWater(layout, seed, tally)
+        surveyVariety(layout, tally)
     }
     check(tally.pits > 0) { "no floor holes anywhere — room variety is gone" }
     check(tally.holeColumns > 0) { "no floor hole resolves to an open lattice hole — pits have nowhere to lead" }
@@ -34,6 +36,12 @@ fun main(args: Array<String>) {
     check(tally.flickeringLamps > 0) { "no flickering lamps anywhere" }
     check(tally.deadLamps > 0) { "no dead lamp fixtures anywhere" }
     check(tally.dimLamps > 0) { "no dim lamps anywhere" }
+    check(tally.almondLight + tally.almondDark > 0) { "no almond water anywhere" }
+    val lightBottles = tally.almondLight.toDouble() / tally.lightCells
+    val darkBottles = tally.almondDark.toDouble() / tally.darkCells
+    check(darkBottles > lightBottles * 1.5) {
+        "dark sectors hold ${darkBottles.pct()}% bottles per cell against ${lightBottles.pct()}% in lit ones"
+    }
     val dropHit = tally.dropHits.toDouble() / tally.dropTries
     check(dropHit > 0.95) { "only ${dropHit.pct()}% of teleport anchors found a corridor to fall into" }
     val crawlHit = tally.crawlHits.toDouble() / tally.crawlTries
@@ -54,15 +62,44 @@ fun main(args: Array<String>) {
     )
     println("  corridor drops: ${dropHit.pct()}% of teleport anchors.")
     println("  crawlspace sites: ${crawlHit.pct()}% of sampled footings, ${crawlAxisHit.pct()}% on a named axis.")
+    val perDarkCell = listOf(tally.anomalies, tally.soaks, tally.leaks).map { it * 1000.0 / tally.darkCells }
     println(
-        "  damage per window: ${"%.1f".format(tally.anomalies.toDouble() / SEEDS)} wall-anomaly columns, " +
-            "${"%.1f".format(tally.soaks.toDouble() / SEEDS)} stained carpet blocks, " +
-            "${"%.1f".format(tally.leaks.toDouble() / SEEDS)} stained tiles."
+        "  damage per 1000 dark cells: ${"%.1f".format(perDarkCell[0])} wall-anomaly columns, " +
+            "${"%.1f".format(perDarkCell[1])} stained carpet blocks, ${"%.1f".format(perDarkCell[2])} stained tiles; none in lit zones."
     )
+    for ((density, before) in perDarkCell.zip(listOf(20.4, 48.6, 23.8))) {
+        check(density in before..before * 1.6) { "dark-zone damage must run a little above the old even spread $before per 1000 cells, got $perDarkCell" }
+    }
     println(
         "  lamps per window: ${tally.litLamps / SEEDS} lit, ${tally.flickeringLamps / SEEDS} flickering, " +
-            "${tally.dimLamps / SEEDS} dim, ${tally.deadLamps / SEEDS} dead."
+            "${tally.dimLamps / SEEDS} dim, ${tally.deadLamps / SEEDS} dead; dark zones: one lamp per " +
+            "${tally.darkCells / maxOf(1, tally.darkLamps)} cells, ${(tally.darkFlickering.toDouble() / maxOf(1, tally.darkLamps)).pct()}% flickering, ${(tally.darkDim.toDouble() / maxOf(1, tally.darkLamps)).pct()}% dim."
     )
+    val fixtures = tally.lightShares.sum().toDouble()
+    val shares = tally.lightShares.map { it / fixtures }
+    println("  lit-zone fixtures: %.1f%% on, %.1f%% flickering, %.1f%% dim, %.1f%% dead".format(shares[0] * 100, shares[1] * 100, shares[2] * 100, shares[3] * 100))
+    for ((share, target) in shares.zip(listOf(0.70, 0.20, 0.05, 0.05))) {
+        check(share in target - 0.03..target + 0.03) { "lit-zone fixtures must be 70/20/5/5 on/flickering/dim/dead, got $shares" }
+    }
+    for ((kind, count) in listOf("flickering" to tally.darkFlickering, "dim" to tally.darkDim, "lit" to tally.darkLamps - tally.darkFlickering - tally.darkDim)) {
+        check(count.toDouble() / tally.darkLamps in 0.25..0.42) { "dark-zone lamps must split into thirds, $kind is $count of ${tally.darkLamps}" }
+    }
+    println(
+        "  almond water per window: ${"%.1f".format((tally.almondLight + tally.almondDark).toDouble() / SEEDS)} " +
+            "in ${tally.hideouts / SEEDS} hideouts, one per " +
+            "${tally.lightCells / maxOf(1, tally.almondLight)} lit cells, one per ${tally.darkCells / maxOf(1, tally.almondDark)} dark cells."
+    )
+    val surveyed = tally.surveyCells.toDouble()
+    val darkZonesPerMillion = tally.darkZones * 1e6 / surveyed
+    val squareKm = 1e6 / (MazeLayout.CELL * MazeLayout.CELL)
+    println(
+        "  survey of ${tally.surveyCells / SEEDS} cells per seed: dark ${"%.1f".format(tally.darkSurveyed * 100 / surveyed)}% " +
+            "in ${"%.1f".format(darkZonesPerMillion / 1e6 * squareKm)} zones per km2 of ${tally.darkSurveyed / maxOf(1, tally.darkZones)} cells, " +
+            "grime ${"%.2f".format(tally.grimeSum / maxOf(1, tally.darkSurveyed))} on average, full in ${(tally.grimeFull.toDouble() / maxOf(1, tally.darkSurveyed)).pct()}% of dark cells, " +
+            "tall ${"%.1f".format(tally.tallSurveyed * 100 / surveyed)}%, hole halls ${"%.1f".format(tally.pitSurveyed * 100 / surveyed)}%, " +
+            "rooms ${"%.1f".format(tally.roomSurveyed * 100 / surveyed)}%."
+    )
+    check(tally.darkSurveyed / surveyed in 0.2..0.34) { "dark zones cover ${(tally.darkSurveyed / surveyed).pct()}% of the maze" }
     val map = args.firstOrNull { it.startsWith("--map") }
     if (map != null) printMap(MazeLayout(map.substringAfter("=", "-3").toLong()))
 }
@@ -128,12 +165,74 @@ private class Tally {
     var flickeringLamps = 0
     var deadLamps = 0
     var dimLamps = 0
+    var darkLamps = 0
+    var darkFlickering = 0
+    val lightShares = IntArray(4)
+    var darkDim = 0
+    var hideouts = 0
+    var almondLight = 0
+    var almondDark = 0
+    var lightCells = 0
+    var darkCells = 0
     var crawlTries = 0
     var crawlHits = 0
     var crawlAxisTries = 0
     var crawlAxisHits = 0
     var minOpen = 1.0
     var maxOpen = 0.0
+    var surveyCells = 0
+    var darkSurveyed = 0
+    var darkZones = 0
+    var grimeSum = 0.0
+    var grimeFull = 0
+    var tallSurveyed = 0
+    var pitSurveyed = 0
+    var roomSurveyed = 0
+}
+
+private const val SURVEY_CELLS = 256
+
+private fun surveyVariety(layout: MazeLayout, tally: Tally) {
+    val n = SURVEY_CELLS
+    val dark = BooleanArray(n * n)
+    for (i in 0 until n) for (j in 0 until n) {
+        val x = (i - n / 2) * MazeLayout.CELL + MazeLayout.CENTRE
+        val z = (j - n / 2) * MazeLayout.CELL + MazeLayout.CENTRE
+        val column = layout.columnAt(x, z)
+        dark[i * n + j] = column and MazeLayout.DARK_ZONE != 0
+        val grime = layout.grimeAt(x, z)
+        check(grime in 0f..1f) { "grime $grime at ($x, $z) is outside 0..1" }
+        check(dark[i * n + j] || grime == 0f) { "lit cell at ($x, $z) carries grime $grime" }
+        tally.grimeSum += grime
+        if (grime == 1f) tally.grimeFull++
+        if (MazeLayout.ceilingOf(column) == MazeLayout.CEILING_HIGH) tally.tallSurveyed++
+        if (column and MazeLayout.PIT_ROOM != 0) tally.pitSurveyed++
+        if (!solid(layout, x - MazeLayout.CENTRE, z - MazeLayout.CENTRE)) tally.roomSurveyed++
+    }
+    tally.surveyCells += n * n
+    tally.darkSurveyed += dark.count { it }
+    val seen = BooleanArray(n * n)
+    val queue = IntArray(n * n)
+    for (start in 0 until n * n) {
+        if (!dark[start] || seen[start]) continue
+        tally.darkZones++
+        var head = 0
+        var tail = 0
+        queue[tail++] = start
+        seen[start] = true
+        while (head < tail) {
+            val cell = queue[head++]
+            val ci = cell / n
+            val cj = cell % n
+            for ((ni, nj) in arrayOf(ci - 1 to cj, ci + 1 to cj, ci to cj - 1, ci to cj + 1)) {
+                if (ni !in 0 until n || nj !in 0 until n) continue
+                val next = ni * n + nj
+                if (!dark[next] || seen[next]) continue
+                seen[next] = true
+                queue[tail++] = next
+            }
+        }
+    }
 }
 
 private fun Double.pct(): Int = Math.round(this * 100).toInt()
@@ -233,6 +332,14 @@ private fun checkFooting(layout: MazeLayout, seed: Long) {
     val flags = layout.columnAt(footing[0], footing[1])
     check(flags and MazeLayout.SOLID == 0) { "seed $seed: spawn footing is inside a wall" }
     check(flags and MazeLayout.PIT == 0) { "seed $seed: spawn footing is over a hole" }
+    val deep = (0 until SURVEY_CELLS * SURVEY_CELLS).asSequence()
+        .map { (it / SURVEY_CELLS - SURVEY_CELLS / 2) * MazeLayout.CELL + MazeLayout.CENTRE to (it % SURVEY_CELLS - SURVEY_CELLS / 2) * MazeLayout.CELL + MazeLayout.CENTRE }
+        .first { (x, z) -> layout.grimeAt(x, z) == 1f }
+    val entry = layout.findFooting(deep.first, deep.second, 128, lit = true)
+    val entryFlags = layout.columnAt(entry[0], entry[1])
+    check(entryFlags and (MazeLayout.SOLID or MazeLayout.PIT or MazeLayout.DARK_ZONE) == 0) {
+        "seed $seed: entry footing from deep in the dark zone at $deep lands on ${entry.toList()}, flags $entryFlags"
+    }
 }
 
 private fun checkCrawlspace(layout: MazeLayout, seed: Long, tally: Tally) {
@@ -362,12 +469,30 @@ private fun checkShape(layout: MazeLayout, seed: Long, tally: Tally) {
             }
             if (centre) {
                 if (lit) litCells++ else darkCells++
+                val darkZone = column and MazeLayout.DARK_ZONE != 0
+                val flickers = lit && layout.lampFlickers(x, z, darkZone)
+                val dims = lit && !flickers && layout.lampDims(x, z, darkZone)
                 when {
                     dead -> tally.deadLamps++
                     !lit -> {}
-                    layout.lampFlickers(x, z, column and MazeLayout.DARK_ZONE != 0) -> tally.flickeringLamps++
-                    layout.lampDims(x, z, column and MazeLayout.DARK_ZONE != 0) -> tally.dimLamps++
+                    flickers -> tally.flickeringLamps++
+                    dims -> tally.dimLamps++
                     else -> tally.litLamps++
+                }
+                check(!(dead && darkZone)) { "seed $seed: dead lamp fixture at ($x, $z) inside a dark zone" }
+                if (!darkZone && (lit || dead)) {
+                    val share = when {
+                        dead -> 3
+                        flickers -> 1
+                        dims -> 2
+                        else -> 0
+                    }
+                    tally.lightShares[share]++
+                }
+                if (lit && darkZone) {
+                    tally.darkLamps++
+                    if (flickers) tally.darkFlickering++
+                    if (dims) tally.darkDim++
                 }
             }
 
@@ -388,7 +513,7 @@ private fun checkShape(layout: MazeLayout, seed: Long, tally: Tally) {
     check(openRatio in 0.45..0.88) { "seed $seed: open ratio $openRatio outside the corridor-maze range" }
     check(lamps > 0) { "seed $seed: no lamps placed" }
     val litFraction = litCells.toDouble() / (litCells + darkCells)
-    check(litFraction in 0.55..0.98) { "seed $seed: $litFraction of centre lines lit" }
+    check(litFraction in 0.35..0.98) { "seed $seed: $litFraction of centre lines lit" }
     if (darkCells > 0) tally.darkStretches++
     tally.minOpen = minOf(tally.minOpen, openRatio)
     tally.maxOpen = maxOf(tally.maxOpen, openRatio)
@@ -463,6 +588,7 @@ private fun countAnomalies(layout: MazeLayout, tally: Tally) {
                     val soak = layout.carpetAnomaly(x, z)
                     if (soak >= 0) {
                         tally.soaks++
+                        checkGrimy(layout, x, z, "carpet stain")
                         checkFlatSlice(MazeLayout.CARPET_ANOMALIES, soak, x, z, "carpet") { nx, nz ->
                             layout.carpetAnomaly(nx, nz)
                         }
@@ -472,6 +598,7 @@ private fun countAnomalies(layout: MazeLayout, tally: Tally) {
                 val leak = layout.ceilingAnomaly(x, z, ceiling)
                 if (leak >= 0) {
                     tally.leaks++
+                    checkGrimy(layout, x, z, "ceiling stain")
                     checkFlatSlice(MazeLayout.CEILING_ANOMALIES, leak, x, z, "ceiling") { nx, nz ->
                         layout.ceilingAnomaly(nx, nz, MazeLayout.ceilingOf(layout.columnAt(nx, nz)))
                     }
@@ -479,6 +606,32 @@ private fun countAnomalies(layout: MazeLayout, tally: Tally) {
                 continue
             }
             checkWallColumn(layout, x, z, tally)
+        }
+    }
+}
+
+private fun checkAlmondWater(layout: MazeLayout, seed: Long, tally: Tally) {
+    val origin = -WINDOW / 2
+    val bottles = HashMap<Long, Int>()
+    for (x in origin until origin + WINDOW) {
+        for (z in origin until origin + WINDOW) {
+            val column = layout.columnAt(x, z)
+            val dark = column and MazeLayout.DARK_ZONE != 0
+            val cellX = Math.floorDiv(x, MazeLayout.CELL)
+            val cellZ = Math.floorDiv(z, MazeLayout.CELL)
+            if (Math.floorMod(x, MazeLayout.CELL) == MazeLayout.CENTRE && Math.floorMod(z, MazeLayout.CELL) == MazeLayout.CENTRE) {
+                if (dark) tally.darkCells++ else tally.lightCells++
+                if (layout.isHideout(cellX, cellZ)) tally.hideouts++
+            }
+            if (!layout.almondWaterAt(x, z)) continue
+            val where = "seed $seed: almond water at ($x, $z)"
+            check(column and (MazeLayout.SOLID or MazeLayout.PIT_ROOM) == 0) { "$where stands in a wall or a hole hall" }
+            check(layout.isHideout(cellX, cellZ)) { "$where is in a cell that is not a hideout" }
+            val walls = listOf(x - 1 to z, x + 1 to z, x to z - 1, x to z + 1).count { (nx, nz) -> solid(layout, nx, nz) }
+            check(walls <= 2) { "$where is boxed in on three sides" }
+            val cell = (cellX.toLong() shl 32) or (cellZ.toLong() and 0xFFFF_FFFFL)
+            check(bottles.merge(cell, 1, Int::plus) == 1) { "$where shares its cell with another bottle" }
+            if (dark) tally.almondDark++ else tally.almondLight++
         }
     }
 }
@@ -515,7 +668,14 @@ private fun checkWallColumn(layout: MazeLayout, x: Int, z: Int, tally: Tally) {
             }
         }
     }
-    if (sawAnomaly) tally.anomalies++
+    if (sawAnomaly) {
+        tally.anomalies++
+        checkGrimy(layout, x, z, "wall anomaly")
+    }
+}
+
+private fun checkGrimy(layout: MazeLayout, x: Int, z: Int, what: String) {
+    check(layout.columnAt(x, z) and MazeLayout.DARK_ZONE != 0 && layout.grimeAt(x, z) > 0f) { "$what at ($x, $z) lies outside the dark zone" }
 }
 
 private fun checkFlatSlice(

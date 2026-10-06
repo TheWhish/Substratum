@@ -6,13 +6,19 @@ import net.minecraft.core.BlockPos
 import net.minecraft.core.registries.Registries
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
 import net.minecraft.util.RandomSource
 import net.minecraft.util.StringRepresentable
+import net.minecraft.world.InteractionResult
 import net.minecraft.world.entity.Entity
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.item.BlockItem
 import net.minecraft.world.item.Item
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.level.BlockGetter
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.LevelReader
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.RenderShape
 import net.minecraft.world.level.block.SoundType
@@ -24,9 +30,13 @@ import net.minecraft.world.level.block.state.properties.EnumProperty
 import net.minecraft.world.level.block.state.properties.IntegerProperty
 import net.minecraft.world.level.material.MapColor
 import net.minecraft.world.level.material.PushReaction
+import net.minecraft.world.phys.BlockHitResult
+import net.minecraft.world.phys.shapes.CollisionContext
+import net.minecraft.world.phys.shapes.VoxelShape
 import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.client.LampFlicker
 import xyz.thewhish.substratum.level.AbyssGuard
+import xyz.thewhish.substratum.level.BackroomsGuard
 import xyz.thewhish.substratum.level.LampBursts
 import xyz.thewhish.substratum.level.PitExitGuard
 import xyz.thewhish.substratum.rift.RiftCutBlock
@@ -50,11 +60,8 @@ object ModBlocks {
     enum class LampCondition(private val id: String, val brightness: Float) : StringRepresentable {
         ON("on", 1f),
         FLICKERING("flickering", 1f),
-        FLICKERING_OFF("flickering_off", 0f),
-        DEAD("dead", 0f),
-        BROKEN("broken", 0f),
         DIM("dim", 0.2f),
-        OUT("out", 0f);
+        DEAD("dead", 0f);
 
         val lit: Boolean get() = brightness > 0f
 
@@ -146,6 +153,20 @@ object ModBlocks {
                 .noOcclusion()
                 .pushReaction(PushReaction.BLOCK)
                 .isValidSpawn { _, _, _, _ -> false }
+        )
+    }
+
+    val ALMOND_WATER: RegistrySupplier<Block> = BLOCKS.register("almond_water") {
+        AlmondWaterBlock(
+            BlockBehaviour.Properties.of()
+                .mapColor(MapColor.NONE)
+                .instabreak()
+                .noCollission()
+                .noOcclusion()
+                .offsetType(BlockBehaviour.OffsetType.XZ)
+                .sound(SoundType.GLASS)
+                .pushReaction(PushReaction.DESTROY)
+                .noLootTable()
         )
     }
 
@@ -257,6 +278,26 @@ object ModBlocks {
         }
     }
 
+    private class AlmondWaterBlock(properties: Properties) : Block(properties) {
+        override fun getShape(state: BlockState, level: BlockGetter, pos: BlockPos, context: CollisionContext): VoxelShape {
+            val offset = state.getOffset(level, pos)
+            return BOTTLE_SHAPE.move(offset.x, offset.y, offset.z)
+        }
+
+        override fun getCloneItemStack(level: LevelReader, pos: BlockPos, state: BlockState): ItemStack =
+            ItemStack(ModItems.ALMOND_WATER.get())
+
+        override fun useWithoutItem(state: BlockState, level: Level, pos: BlockPos, player: Player, hit: BlockHitResult): InteractionResult {
+            if (level.isClientSide) return InteractionResult.SUCCESS
+            level.removeBlock(pos, false)
+            BackroomsGuard.resyncRemoteWatchersAfterCrossPortalEdit(level, pos)
+            player.inventory.placeItemBackInInventory(ItemStack(ModItems.ALMOND_WATER.get()))
+            val pitch = ((level.random.nextFloat() - level.random.nextFloat()) * 0.7f + 1f) * 2f
+            level.playSound(null, pos, SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f, pitch)
+            return InteractionResult.CONSUME
+        }
+    }
+
     private class PitVoidBlock(properties: Properties) : Block(properties) {
         override fun entityInside(state: BlockState, level: Level, pos: BlockPos, entity: Entity) {
             if (entity is ServerPlayer) PitExitGuard.onShaftEntered(entity, pos)
@@ -294,4 +335,6 @@ object ModBlocks {
     private const val LAMP_LIGHT = 15
 
     private const val LAMP_CRACKLE_CHANCE = 1f / 14
+
+    private val BOTTLE_SHAPE: VoxelShape = Block.box(5.0, 0.0, 5.0, 11.0, 8.0, 11.0)
 }

@@ -1,0 +1,66 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "substratum:block/almond_water"
+      },
+      {
+        "model": "substratum:block/almond_water_1"
+      },
+      {
+        "model": "substratum:block/almond_water_2"
+      },
+      {
+        "model": "substratum:block/almond_water_3"
+      },
+      {
+        "model": "substratum:block/almond_water",
+        "y": 90
+      },
+      {
+        "model": "substratum:block/almond_water_1",
+        "y": 90
+      },
+      {
+        "model": "substratum:block/almond_water_2",
+        "y": 90
+      },
+      {
+        "model": "substratum:block/almond_water_3",
+        "y": 90
+      },
+      {
+        "model": "substratum:block/almond_water",
+        "y": 180
+      },
+      {
+        "model": "substratum:block/almond_water_1",
+        "y": 180
+      },
+      {
+        "model": "substratum:block/almond_water_2",
+        "y": 180
+      },
+      {
+        "model": "substratum:block/almond_water_3",
+        "y": 180
+      },
+      {
+        "model": "substratum:block/almond_water",
+        "y": 270
+      },
+      {
+        "model": "substratum:block/almond_water_1",
+        "y": 270
+      },
+      {
+        "model": "substratum:block/almond_water_2",
+        "y": 270
+      },
+      {
+        "model": "substratum:block/almond_water_3",
+        "y": 270
+      }
+    ]
+  }
+}

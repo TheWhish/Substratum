@@ -64,7 +64,21 @@ class MazeLayout(val seed: Long) {
         private const val DROP_HALF = PIT_HOLE / 2
         private const val CORRIDOR_HALF = (CELL - WALL) / 2
 
-        private const val PIT_HALL_ODDS = 5
+        private const val PIT_HALL_CHANCE = 0.4f
+        private const val GRAND_ROOM_CHANCE = 0.24f
+
+        private const val SALT_DARK = 0x4E16
+        private const val DARK_DISTRICT = 32
+        private const val DARK_ODDS = 0xB333
+        private const val DARK_MARGIN = 6
+        private const val DARK_RADIUS = 11
+        private const val DARK_RADIUS_SPAN = 5
+        private const val DARK_FADE = 3f
+        private const val DARK_LAMPS = 0.07f
+        private const val DARK_LAMPS_SPAN = 0.08f
+        private const val DARK_BELOW = 0.5f
+        private const val GRIME_RAMP = 2f
+        private const val GRIME_ANOMALIES = 1.4f
 
         private const val DOOR_LOW = 32
 
@@ -77,16 +91,19 @@ class MazeLayout(val seed: Long) {
 
         private const val SALT_DIRT_THIN = 0x4E11
         private const val SALT_FLICKER = 0x4E12
-        private const val FLICKER_RATE = 0x2666
-        private const val DARK_FLICKER_RATE = 0x7333
+        private const val FLICKER_RATE = 0x35E5
+        private const val DARK_FLICKER_RATE = 0x5555
+        private const val LIT_LAMPS = 0.95f
         private const val SALT_DEAD_LAMP = 0x4E13
+        private const val DEAD_LAMP_RATE = 0x0CCD
         private const val SALT_DIM = 0x4E14
-        private const val DIM_RATE = 0x2666
-        private const val DARK_DIM_RATE = 0x4000
-        private const val DEAD_LAMP_RATE = 0x7333
+        private const val DIM_RATE = 0x1111
+        private const val DARK_DIM_RATE = 0x8000
 
-        private const val DIRT_THIN_RATE = 0xCCCD
-        private const val DARK_DIRT_THIN_RATE = 0x3333
+        private const val SALT_ALMOND = 0x4E15
+        private const val ALMOND_RATE = 0x6000
+        private const val DARK_ALMOND_RATE = 0xD000
+        private const val HIDEOUT_DEPTH = 3
 
         private const val ANOMALY_PITCH = 4
 
@@ -176,7 +193,12 @@ class MazeLayout(val seed: Long) {
         fun range(min: Float, max: Float): Float = min + nextFloat() * (max - min)
     }
 
+    private class Recent(val key: Long, val sector: Sector)
+
     private val cache = ConcurrentHashMap<Long, Sector>()
+
+    @Volatile
+    private var recent: Recent? = null
 
     fun columnAt(x: Int, z: Int): Int {
         val cellX = Math.floorDiv(x, CELL)
@@ -187,7 +209,9 @@ class MazeLayout(val seed: Long) {
         val onNorthBand = localZ < WALL
 
         var flags = 0
-        if (sectorOf(cellX, cellZ).dark) flags = flags or DARK_ZONE
+        val sector = sectorOf(cellX, cellZ)
+        val i = localIndex(cellX, cellZ)
+        if (sector.dark[i]) flags = flags or DARK_ZONE
         var ceiling: Int
         var top: Int
         val pitField: Boolean
@@ -235,13 +259,14 @@ class MazeLayout(val seed: Long) {
             if (door and DOOR_LOW != 0) ceiling = minOf(ceiling, CEILING_TIGHT)
             pitField = cellPit(cellX, cellZ - 1) && cellPit(cellX, cellZ)
         } else {
-            val sector = sectorOf(cellX, cellZ)
-            val i = localIndex(cellX, cellZ)
             ceiling = sector.ceiling[i].toInt()
             top = ceiling
             if (localX == CENTRE && localZ == CENTRE) {
-                if (sector.lamp[i]) flags = flags or LAMP
-                else if (!sector.dark || ((seedFor(seed, x, z, SALT_DEAD_LAMP) ushr 17) and 0xFFFF) < DEAD_LAMP_RATE) flags = flags or DEAD_LAMP
+                flags = flags or when {
+                    sector.dark[i] -> if (sector.lamp[i]) LAMP else 0
+                    ((seedFor(seed, x, z, SALT_DEAD_LAMP) ushr 17) and 0xFFFF) < DEAD_LAMP_RATE -> DEAD_LAMP
+                    else -> LAMP
+                }
             }
             pitField = sector.pit[i]
         }
@@ -267,13 +292,14 @@ class MazeLayout(val seed: Long) {
         else -> -1
     }
 
-    fun findFooting(x: Int, z: Int, radius: Int): IntArray {
+    fun findFooting(x: Int, z: Int, radius: Int, lit: Boolean = false): IntArray {
         for (r in 0..radius) {
             for (dx in -r..r) {
                 for (dz in -r..r) {
                     if (maxOf(abs(dx), abs(dz)) != r) continue
                     val flags = columnAt(x + dx, z + dz)
-                    if (flags and SOLID == 0 && flags and PIT == 0) return intArrayOf(x + dx, z + dz)
+                    if (flags and (SOLID or PIT) != 0 || lit && flags and DARK_ZONE != 0) continue
+                    return intArrayOf(x + dx, z + dz)
                 }
             }
         }
@@ -516,8 +542,8 @@ class MazeLayout(val seed: Long) {
         val anchorZ = Math.floorDiv(z, ANOMALY_PITCH) * ANOMALY_PITCH
         val alongXHash = seedFor(seed, anchorX * 2, z, SALT_ANOMALY)
         val alongZHash = seedFor(seed, anchorZ * 2 + 1, x, SALT_ANOMALY)
-        val xWants = ((alongXHash ushr 17) and 0xFFFF) < WALL_ANOMALY_RATE
-        val zWants = ((alongZHash ushr 17) and 0xFFFF) < WALL_ANOMALY_RATE
+        val xWants = anomalyRolls(alongXHash, WALL_ANOMALY_RATE, anchorX, z)
+        val zWants = anomalyRolls(alongZHash, WALL_ANOMALY_RATE, x, anchorZ)
         if (!xWants && !zWants) return -1
 
         val xFires = xWants && !wallAnchorFires(anchorX - ANOMALY_PITCH, z, true) &&
@@ -552,7 +578,13 @@ class MazeLayout(val seed: Long) {
     private fun wallAnchorFires(anchor: Int, perp: Int, alongX: Boolean): Boolean {
         val hash = if (alongX) seedFor(seed, anchor * 2, perp, SALT_ANOMALY)
         else seedFor(seed, anchor * 2 + 1, perp, SALT_ANOMALY)
-        return ((hash ushr 17) and 0xFFFF) < WALL_ANOMALY_RATE
+        return if (alongX) anomalyRolls(hash, WALL_ANOMALY_RATE, anchor, perp) else anomalyRolls(hash, WALL_ANOMALY_RATE, perp, anchor)
+    }
+
+    private fun anomalyRolls(hash: Long, rate: Int, x: Int, z: Int): Boolean {
+        val roll = (hash ushr 17) and 0xFFFF
+        val most = rate * GRIME_ANOMALIES
+        return roll < most && roll < most * grimeAt(x, z)
     }
 
     private fun wallFootprintFits(
@@ -587,14 +619,114 @@ class MazeLayout(val seed: Long) {
     fun ceilingAnomaly(x: Int, z: Int, ceiling: Int): Int =
         flatAnomaly(x, z, SALT_LEAK, CEILING_ANOMALY_RATE, CEILING_ANOMALIES, CEILING_ROLL, ceiling)
 
-    fun dirtThinned(x: Int, y: Int, z: Int, dark: Boolean): Boolean =
-        ((mix64(seedFor(seed, x, y, SALT_DIRT_THIN) + z * KEY_C) ushr 17) and 0xFFFF) < if (dark) DARK_DIRT_THIN_RATE else DIRT_THIN_RATE
+    fun grimeAt(x: Int, z: Int): Float {
+        val cellX = Math.floorDiv(x, CELL)
+        val cellZ = Math.floorDiv(z, CELL)
+        return sectorOf(cellX, cellZ).grime[localIndex(cellX, cellZ)]
+    }
+
+    fun dirtThinned(x: Int, y: Int, z: Int, grime: Float): Boolean =
+        ((mix64(seedFor(seed, x, y, SALT_DIRT_THIN) + z * KEY_C) ushr 17) and 0xFFFF) >= grime * 0x10000
 
     fun lampFlickers(x: Int, z: Int, dark: Boolean): Boolean =
         ((seedFor(seed, x, z, SALT_FLICKER) ushr 17) and 0xFFFF) < if (dark) DARK_FLICKER_RATE else FLICKER_RATE
 
     fun lampDims(x: Int, z: Int, dark: Boolean): Boolean =
         ((seedFor(seed, x, z, SALT_DIM) ushr 17) and 0xFFFF) < if (dark) DARK_DIM_RATE else DIM_RATE
+
+    fun almondWaterAt(x: Int, z: Int): Boolean {
+        val localX = Math.floorMod(x, CELL)
+        val localZ = Math.floorMod(z, CELL)
+        if (localX < WALL || localZ < WALL) return false
+        val cellX = Math.floorDiv(x, CELL)
+        val cellZ = Math.floorDiv(z, CELL)
+        val roll = seedFor(seed, cellX, cellZ, SALT_ALMOND)
+        val rate = if (sectorOf(cellX, cellZ).dark[localIndex(cellX, cellZ)]) DARK_ALMOND_RATE else ALMOND_RATE
+        if (((roll ushr 17) and 0xFFFF) >= rate) return false
+        val mouth = openSide(cellX, cellZ)
+        if (mouth < 0) return false
+        val pick = roll ushr 33
+        if (doorOn(cellX, cellZ, mouth) != 0) {
+            val open = CELL - WALL
+            return localX == WALL + (pick % open).toInt() && localZ == WALL + (pick / open % open).toInt() &&
+                !cellPit(cellX, cellZ)
+        }
+        val across = WALL + 1 + (pick % 3).toInt()
+        val depth = (pick / 3 % (CELL - WALL - 1)).toInt()
+        val placed = when (mouth) {
+            WEST -> localX == WALL + depth && localZ == across
+            EAST -> localX == CELL - 1 - depth && localZ == across
+            NORTH -> localZ == WALL + depth && localX == across
+            else -> localZ == CELL - 1 - depth && localX == across
+        }
+        return placed && isHideout(cellX, cellZ, mouth)
+    }
+
+    internal fun isHideout(cellX: Int, cellZ: Int): Boolean {
+        val mouth = openSide(cellX, cellZ)
+        return mouth >= 0 && isHideout(cellX, cellZ, mouth)
+    }
+
+    private fun isHideout(cellX: Int, cellZ: Int, mouth: Int): Boolean =
+        !cellPit(cellX, cellZ) && (doorOn(cellX, cellZ, mouth) != 0 || branchDepth(cellX, cellZ, mouth) >= HIDEOUT_DEPTH)
+
+    private fun openSide(cellX: Int, cellZ: Int): Int {
+        var side = -1
+        for (dir in WEST..SOUTH) {
+            if (!opens(cellX, cellZ, dir)) continue
+            if (side >= 0) return -1
+            side = dir
+        }
+        return side
+    }
+
+    private fun branchDepth(cellX: Int, cellZ: Int, mouth: Int): Int {
+        var x = cellX
+        var z = cellZ
+        var dir = mouth
+        var depth = 1
+        while (depth < HIDEOUT_DEPTH) {
+            x += stepX(dir)
+            z += stepZ(dir)
+            val back = dir xor 1
+            var next = -1
+            for (side in WEST..SOUTH) {
+                if (side == back || !opens(x, z, side)) continue
+                if (next >= 0) return depth
+                next = side
+            }
+            if (next < 0) return depth
+            dir = next
+            depth++
+        }
+        return depth
+    }
+
+    private fun opens(cellX: Int, cellZ: Int, dir: Int): Boolean = when (dir) {
+        WEST -> !vWall(cellX, cellZ)
+        EAST -> !vWall(cellX + 1, cellZ)
+        NORTH -> !hWall(cellX, cellZ)
+        else -> !hWall(cellX, cellZ + 1)
+    }
+
+    private fun doorOn(cellX: Int, cellZ: Int, dir: Int): Int = when (dir) {
+        WEST -> vDoor(cellX, cellZ)
+        EAST -> vDoor(cellX + 1, cellZ)
+        NORTH -> hDoor(cellX, cellZ)
+        else -> hDoor(cellX, cellZ + 1)
+    }
+
+    private fun stepX(dir: Int): Int = when (dir) {
+        WEST -> -1
+        EAST -> 1
+        else -> 0
+    }
+
+    private fun stepZ(dir: Int): Int = when (dir) {
+        NORTH -> -1
+        SOUTH -> 1
+        else -> 0
+    }
 
     private fun flatAnomaly(
         x: Int,
@@ -608,13 +740,13 @@ class MazeLayout(val seed: Long) {
         val anchorX = Math.floorDiv(x, ANOMALY_PITCH) * ANOMALY_PITCH
         val anchorZ = Math.floorDiv(z, ANOMALY_PITCH) * ANOMALY_PITCH
         val hash = seedFor(seed, anchorX, anchorZ, salt)
-        if (((hash ushr 17) and 0xFFFF) >= rate) return -1
+        if (!anomalyRolls(hash, rate, anchorX, anchorZ)) return -1
         for (dx in -1..1) {
             for (dz in -1..1) {
                 if (dx == 0 && dz == 0) continue
                 val nx = anchorX + dx * ANOMALY_PITCH
                 val nz = anchorZ + dz * ANOMALY_PITCH
-                if (((seedFor(seed, nx, nz, salt) ushr 17) and 0xFFFF) < rate) return -1
+                if (anomalyRolls(seedFor(seed, nx, nz, salt), rate, nx, nz)) return -1
             }
         }
         val kind = kinds[roll[((hash ushr 33) % roll.size).toInt()]]
@@ -662,9 +794,14 @@ class MazeLayout(val seed: Long) {
         val sectorX = Math.floorDiv(cellX, SECTOR_CELLS)
         val sectorZ = Math.floorDiv(cellZ, SECTOR_CELLS)
         val key = (sectorX.toLong() shl 32) or (sectorZ.toLong() and 0xFFFF_FFFFL)
-        cache[key]?.let { return it }
-        if (cache.size > MAX_CACHED_SECTORS) cache.clear()
-        return cache.computeIfAbsent(key) { Sector.build(seed, sectorX, sectorZ) }
+        val last = recent
+        if (last != null && last.key == key) return last.sector
+        val sector = cache[key] ?: run {
+            if (cache.size > MAX_CACHED_SECTORS) cache.clear()
+            cache.computeIfAbsent(key) { Sector.build(seed, sectorX, sectorZ) }
+        }
+        recent = Recent(key, sector)
+        return sector
     }
 
     private class Plan(
@@ -691,7 +828,8 @@ class MazeLayout(val seed: Long) {
         val pitMinZ: Int,
         val pitMaxX: Int,
         val pitMaxZ: Int,
-        val dark: Boolean,
+        val dark: BooleanArray,
+        val grime: FloatArray,
         val vDoor: ByteArray,
         val hDoor: ByteArray,
         val vNiche: ByteArray,
@@ -730,43 +868,83 @@ class MazeLayout(val seed: Long) {
                 openBorders(rng, v, h)
                 pinchDoorways(rng, plan, v, h, vDoor, hDoor)
                 cutNiches(rng, plan, v, h, vNiche, hNiche)
-                placeLamps(rng, plan.lampChance, lamp)
+                val dark = BooleanArray(N * N)
+                val grime = FloatArray(N * N)
+                for (i in 0 until N * N) {
+                    val cellX = sectorX * N + i / N
+                    val cellZ = sectorZ * N + i % N
+                    val chance = lampChance(worldSeed, cellX, cellZ, plan.lampChance)
+                    dark[i] = chance < DARK_BELOW
+                    if (dark[i]) grime[i] = grimeOf(worldSeed, cellX, cellZ, plan.lampChance)
+                    lamp[i] = rng.nextFloat() < chance
+                }
 
                 val hall = rooms.firstOrNull { it.feature == ROOM_PIT_FIELD }
                 return Sector(
                     v, h, post, lamp, pit, ceiling,
                     hall?.minX ?: -1, hall?.minZ ?: -1, hall?.maxX ?: -1, hall?.maxZ ?: -1,
-                    plan.lampChance < 0.5f,
+                    dark, grime,
                     vDoor, hDoor, vNiche, hNiche
                 )
             }
 
+            private fun lampChance(worldSeed: Long, cellX: Int, cellZ: Int, lit: Float): Float {
+                var chance = lit
+                forDarkZones(worldSeed, cellX, cellZ) { inside, unlit ->
+                    chance = minOf(chance, lit + (unlit - lit) * (inside / DARK_FADE).coerceIn(0f, 1f))
+                }
+                return chance
+            }
+
+            private fun grimeOf(worldSeed: Long, cellX: Int, cellZ: Int, lit: Float): Float {
+                var grime = 0f
+                forDarkZones(worldSeed, cellX, cellZ) { inside, unlit ->
+                    val edge = DARK_FADE * (lit - DARK_BELOW) / (lit - unlit)
+                    grime = maxOf(grime, ((inside - edge) / GRIME_RAMP).coerceIn(0f, 1f))
+                }
+                return grime
+            }
+
+            private inline fun forDarkZones(worldSeed: Long, cellX: Int, cellZ: Int, zone: (inside: Float, unlit: Float) -> Unit) {
+                val districtX = Math.floorDiv(cellX, DARK_DISTRICT)
+                val districtZ = Math.floorDiv(cellZ, DARK_DISTRICT)
+                for (dx in -1..1) for (dz in -1..1) {
+                    val hash = seedFor(worldSeed, districtX + dx, districtZ + dz, SALT_DARK)
+                    if (((hash ushr 17) and 0xFFFF) >= DARK_ODDS) continue
+                    val centreX = (districtX + dx) * DARK_DISTRICT + darkOffset(hash ushr 33)
+                    val centreZ = (districtZ + dz) * DARK_DISTRICT + darkOffset(hash ushr 38)
+                    val radius = DARK_RADIUS + (((hash ushr 43) and 0x3FF) % DARK_RADIUS_SPAN).toInt()
+                    val distance = Math.hypot((cellX - centreX).toDouble(), (cellZ - centreZ).toDouble()).toFloat()
+                    zone(radius - distance, DARK_LAMPS + ((hash ushr 53) and 0xFF) * (DARK_LAMPS_SPAN / 0xFF))
+                }
+            }
+
+            private fun darkOffset(bits: Long): Int =
+                DARK_MARGIN + (bits and 0x1F).toInt() * (DARK_DISTRICT - 2 * DARK_MARGIN) / DARK_DISTRICT
+
             private fun rollPlan(rng: Rng): Plan {
-                if (rng.nextInt(8) == 0) {
+                if (rng.nextFloat() < GRAND_ROOM_CHANCE) {
                     return Plan(
-                        1, 9, 12, rng.range(0.6f, 0.85f), rng.range(0.04f, 0.14f), rollLamps(rng), 0.55f,
+                        1, 9, 12, rng.range(0.6f, 0.85f), rng.range(0.04f, 0.14f), LIT_LAMPS, 0.65f,
                         doorChance = rng.range(0f, 0.3f),
                         lowDoorChance = rng.range(0f, 0.4f),
                         nicheChance = rng.range(0f, 0.10f),
                     )
                 }
-                val spacious = rng.nextInt(3) == 0
+                val spacious = rng.nextInt(5) < 2
                 return Plan(
-                    roomCount = rng.nextInt(7),
+                    roomCount = 1 + rng.nextInt(8),
                     roomMin = 2,
                     roomMax = if (spacious) 5 + rng.nextInt(4) else 2 + rng.nextInt(3),
                     straightBias = rng.range(0.45f, 0.95f),
                     loopChance = rng.range(0.02f, 0.18f),
-                    lampChance = rollLamps(rng),
-                    tallChance = rng.nextFloat() * 0.7f,
+                    lampChance = LIT_LAMPS,
+                    tallChance = rng.range(0.1f, 0.8f),
                     doorChance = rng.range(0f, 0.7f),
                     lowDoorChance = rng.range(0f, 0.5f),
                     nicheChance = rng.range(0f, 0.14f),
                 )
             }
-
-            private fun rollLamps(rng: Rng): Float =
-                if (rng.nextInt(12) == 0) rng.range(0.10f, 0.22f) else rng.range(0.9f, 1f)
 
             private fun placeRooms(rng: Rng, plan: Plan, roomOf: IntArray): List<Room> {
                 val rooms = ArrayList<Room>()
@@ -792,7 +970,7 @@ class MazeLayout(val seed: Long) {
             }
 
             private fun rollPitHall(rng: Rng, rooms: MutableList<Room>) {
-                if (rng.nextInt(PIT_HALL_ODDS) != 0) return
+                if (rng.nextFloat() >= PIT_HALL_CHANCE) return
                 val width = 5 + rng.nextInt(4)
                 val depth = 5 + rng.nextInt(4)
                 val minX = rng.nextInt(N - width + 1)
@@ -984,10 +1162,6 @@ class MazeLayout(val seed: Long) {
                 }
                 if (doors == 0) walls[index(rng.nextInt(N))] = false
             }
-
-            private fun placeLamps(rng: Rng, lampChance: Float, lamp: BooleanArray) {
-                for (i in 0 until N * N) lamp[i] = rng.nextFloat() < lampChance
-            }
         }
     }
 
@@ -1036,7 +1210,11 @@ class MazeLayout(val seed: Long) {
 
                 ROOM_PIT_FIELD -> forEachCell { cx, cz -> pit[cx * n + cz] = true }
 
-                ROOM_INNER -> innerRoom(v, h)
+                ROOM_INNER -> if (maxX - minX < 3 || maxZ - minZ < 3) {
+                    forEachInnerCorner { cx, cz -> post[cx * n + cz] = true }
+                } else {
+                    innerRoom(v, h)
+                }
 
                 ROOM_EMPTY -> Unit
             }
@@ -1051,7 +1229,6 @@ class MazeLayout(val seed: Long) {
         }
 
         private fun innerRoom(v: BooleanArray, h: BooleanArray) {
-            if (maxX - minX < 3 || maxZ - minZ < 3) return
             val n = SECTOR_CELLS
             val innerMinX = minX + 1
             val innerMaxX = maxX - 1

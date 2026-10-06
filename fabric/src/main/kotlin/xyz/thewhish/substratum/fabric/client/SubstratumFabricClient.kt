@@ -19,7 +19,6 @@ object SubstratumFabricClient : ClientModInitializer {
             outlineContext.blockState().block !is RiftCutBlock && context.world().dimension() != SubstratumLevels.LEVEL_0
         }
         InteractionEvent.LEFT_CLICK_BLOCK.register { player, _, pos, _ ->
-            // fabric api fires this on the server too, in singleplayer that punches holes on the client; BackroomsGuard owns that side
             if (!player.level().isClientSide) return@register EventResult.pass()
             val level = if (BlockManipulationClient.isPointingToPortal()) {
                 runCatching { BlockManipulationClient.getRemotePointedWorld() }.getOrNull() ?: player.level()

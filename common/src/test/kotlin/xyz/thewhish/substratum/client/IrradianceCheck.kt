@@ -134,7 +134,7 @@ private fun checkLevels(plan: Plan, field: FloatArray, stored: IntArray) {
     )
     check(worst <= 1f) { "rounding adds a ${"%.2f".format(worst)}-level step between smoothed corners" }
     check(meanError < 0.2) { "dithered corners stray ${"%.3f".format(meanError)} levels from the exact field" }
-    check(darkShare in 0.01..0.35) { "${"%.1f".format(darkShare * 100)}% of the floor is fully dark" }
+    check(darkShare in 0.01..0.45) { "${"%.1f".format(darkShare * 100)}% of the floor is fully dark" }
 }
 
 private fun corner(plan: Plan, values: FloatArray, i: Int, j: Int): Float? {

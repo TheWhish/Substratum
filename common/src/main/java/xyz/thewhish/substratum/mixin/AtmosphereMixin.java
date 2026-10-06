@@ -16,6 +16,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import xyz.thewhish.substratum.client.Atmosphere;
+import xyz.thewhish.substratum.client.ProbeView;
+import xyz.thewhish.substratum.smiler.client.Vanish;
 
 @Mixin(GameRenderer.class)
 abstract class AtmosphereMixin {
@@ -39,6 +41,8 @@ abstract class AtmosphereMixin {
         Operation<Void> original
     ) {
         original.call(renderer, deltaTracker, renderBlockOutline, camera, gameRenderer, lightTexture, view, projection);
+        ProbeView.capture(camera, view, projection);
+        Vanish.afterFrame(camera);
         Atmosphere.renderWorld(this.minecraft, deltaTracker.getGameTimeDeltaPartialTick(false), camera, view, projection, this.renderHand);
     }
 

@@ -4,7 +4,6 @@ import net.minecraft.client.Minecraft
 import net.minecraft.util.Mth
 import net.minecraft.util.RandomSource
 import xyz.thewhish.substratum.level.SubstratumLevels
-import xyz.thewhish.substratum.sanity.SanityPhase
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.sin
@@ -50,20 +49,17 @@ object SanityEffects {
         val level = minecraft.level?.takeIf { it.dimension() == SubstratumLevels.LEVEL_0 }
         val player = minecraft.player
         val inside = level != null && player != null
-        dread += ((if (inside) phaseRamp() else 0f) - dread) * SETTLE
+        val pressure = if (inside) SanityClient.pressure(0f) else 0f
+        dread += (pressure - dread) * SETTLE
         if (level != null && player != null) dark = 1f - smoothstep(3f, 10f, LightField.smoothLight(level, player.eyePosition).toFloat())
         if (pulseAge >= 0 && ++pulseAge > PULSE_END) pulseAge = -1
-        if (!inside || SanityClient.phase != SanityPhase.HUNT) {
+        if (pressure < 1f) {
             nextPulse = FIRST_PULSE
             return
         }
         if (--nextPulse > 0) return
-        startPulse()
-        nextPulse = PULSE_MIN + random.nextInt(PULSE_SPREAD)
-    }
-
-    private fun startPulse() {
         pulseAge = 0
+        nextPulse = PULSE_MIN + random.nextInt(PULSE_SPREAD)
     }
 
     @JvmStatic
@@ -99,15 +95,6 @@ object SanityEffects {
         if (pulseAge < 0) return 0f
         val age = pulseAge + partialTick
         return if (age < PULSE_RISE) smoothstep(0f, PULSE_RISE, age) else exp(-(age - PULSE_RISE) / PULSE_FADE)
-    }
-
-    private fun phaseRamp(): Float = when (SanityClient.phase) {
-        SanityPhase.QUIET -> 0f
-        SanityPhase.HUNT -> 1f
-        SanityPhase.DISORIENTATION -> {
-            val start = SanityPhase.DISORIENTATION.startTick
-            ((SanityClient.ticks(0f) - start) / (SanityPhase.HUNT.startTick - start)).coerceIn(0f, 1f)
-        }
     }
 
     private fun smoothstep(from: Float, to: Float, value: Float): Float {

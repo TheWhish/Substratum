@@ -13,6 +13,7 @@ import net.minecraft.client.renderer.EffectInstance
 import net.minecraft.world.level.ChunkPos
 import net.minecraft.world.phys.Vec3
 import org.joml.Matrix4f
+import org.joml.Vector4f
 import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL20
 import org.lwjgl.opengl.GL30
@@ -41,6 +42,8 @@ object Atmosphere {
     private const val SECONDS_WRAP = 3600f
     private const val PORTALS = 8
     private const val PORTAL_REACH = SubstratumLevels.SIGHT_CHUNKS * 16.0
+    private const val NEAR_W = 0.05f
+    private const val SCISSOR_MARGIN = 4
     private val SCATTER = floatArrayOf(0.88f, 0.72f, 0.56f, 0.43f)
 
     private class Pass(val effect: EffectInstance, val target: RenderTarget) {
@@ -103,7 +106,9 @@ object Atmosphere {
     private var seconds = 0f
     private var lit = false
     private var hands = true
+    private var composited = false
     private val viewProjection = Matrix4f()
+    private val corner = Vector4f()
     private val portalData = MemoryUtil.memAllocFloat(PORTALS * 12)
 
     private val irisInUse: (() -> Boolean)? by lazy {
@@ -120,8 +125,15 @@ object Atmosphere {
         presenceO = presence
         val inside = minecraft.level?.dimension() == SubstratumLevels.LEVEL_0
         presence = if (inside) minOf(1f, presence + ENTER) else maxOf(0f, presence - LEAVE)
-        val level = minecraft.level
-        if (inside && level != null) LightVolume.selectLamps(level, minecraft.gameRenderer.mainCamera.position)
+        val level = minecraft.level ?: return
+        active(minecraft, ClientConfig.intensity)
+        if (inside) LightVolume.selectLamps(level, minecraft.gameRenderer.mainCamera.position)
+    }
+
+    @JvmStatic
+    fun settle(minecraft: Minecraft) {
+        presence = if (minecraft.level?.dimension() == SubstratumLevels.LEVEL_0) 1f else 0f
+        presenceO = presence
     }
 
     @JvmStatic
@@ -146,8 +158,12 @@ object Atmosphere {
         val strength = ClientConfig.intensity
         val current = active(minecraft, strength) ?: return
         val main = minecraft.mainRenderTarget
+        val bounds = portalBounds(camera, view, projection, main)
+        if (bounds != null && (bounds[2] <= bounds[0] || bounds[3] <= bounds[1])) return
         LightVolume.selectLamps(level, camera.position)
+        scissor(bounds, current.light.target, main)
         light(current, level, camera, view, projection, strength)
+        scissor(bounds, main, main)
         current.copy(main)
         current.view.first().effect.apply {
             safeGetUniform("Haze").set(HAZE * strength)
@@ -155,8 +171,43 @@ object Atmosphere {
         }
         prepare()
         current.run(current.view)
+        if (bounds != null) RenderSystem.disableScissor()
         main.bindWrite(true)
         RenderSystem.enableDepthTest()
+    }
+
+    private fun portalBounds(camera: Camera, view: Matrix4f, projection: Matrix4f, main: RenderTarget): IntArray? {
+        val portal = PortalRendering.getRenderingPortal()
+        viewProjection.set(projection).mul(view)
+        var x0 = Float.MAX_VALUE
+        var y0 = Float.MAX_VALUE
+        var x1 = -Float.MAX_VALUE
+        var y1 = -Float.MAX_VALUE
+        for (local in portal.getFourVerticesLocal(0.0)) {
+            val point = portal.transformPoint(portal.originPos.add(local)).subtract(camera.position)
+            corner.set(point.x.toFloat(), point.y.toFloat(), point.z.toFloat(), 1f).mul(viewProjection)
+            if (corner.w < NEAR_W) return null
+            x0 = minOf(x0, corner.x / corner.w)
+            y0 = minOf(y0, corner.y / corner.w)
+            x1 = maxOf(x1, corner.x / corner.w)
+            y1 = maxOf(y1, corner.y / corner.w)
+        }
+        return intArrayOf(
+            pixel(x0, main.width, -SCISSOR_MARGIN), pixel(y0, main.height, -SCISSOR_MARGIN),
+            pixel(x1, main.width, SCISSOR_MARGIN), pixel(y1, main.height, SCISSOR_MARGIN)
+        )
+    }
+
+    private fun pixel(ndc: Float, size: Int, margin: Int): Int =
+        (floor((ndc * 0.5f + 0.5f) * size).toInt() + margin).coerceIn(0, size)
+
+    private fun scissor(bounds: IntArray?, target: RenderTarget, main: RenderTarget) {
+        if (bounds == null) return
+        val x = bounds[0] * target.width / main.width
+        val y = bounds[1] * target.height / main.height
+        val right = (bounds[2] * target.width + main.width - 1) / main.width
+        val top = (bounds[3] * target.height + main.height - 1) / main.height
+        RenderSystem.enableScissor(x, y, right - x, top - y)
     }
 
     private fun light(current: Chain, level: ClientLevel, camera: Camera, view: Matrix4f, projection: Matrix4f, strength: Float) {
@@ -225,7 +276,11 @@ object Atmosphere {
             safeGetUniform("Ghost").set(SanityEffects.ghost(partialTick) * strength)
             safeGetUniform("Tunnel").set(SanityEffects.tunnel(partialTick) * strength)
             safeGetUniform("Drain").set(SanityEffects.drain(partialTick) * strength)
+            safeGetUniform("Vhs").set(Vhs.level(partialTick))
+            safeGetUniform("VhsSeed").set(Vhs.seed)
+            safeGetUniform("VhsShake").set(Vhs.shake())
         }
+        composited = true
         val main = minecraft.mainRenderTarget
         prepare()
         main.setFilterMode(GL11.GL_LINEAR)
@@ -233,6 +288,8 @@ object Atmosphere {
         main.setFilterMode(GL11.GL_NEAREST)
         main.bindWrite(true)
     }
+
+    fun consumeComposited(): Boolean = composited.also { composited = false }
 
     fun reset() {
         chain?.close()

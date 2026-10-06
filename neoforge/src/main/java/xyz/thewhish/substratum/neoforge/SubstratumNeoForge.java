@@ -6,7 +6,6 @@ import net.neoforged.fml.loading.FMLEnvironment;
 import xyz.thewhish.substratum.Substratum;
 import xyz.thewhish.substratum.registry.ModBlockEntities;
 
-// must stay java: fml never scans the kotlin output for @Mod
 @Mod(Substratum.ID)
 public final class SubstratumNeoForge {
 

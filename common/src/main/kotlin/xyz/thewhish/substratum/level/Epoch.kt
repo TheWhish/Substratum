@@ -25,7 +25,6 @@ object Epoch {
         wipe(server)
     }
 
-    // Level 0 is thrown away and regenerated on every start, keep the guard below or this deletes the world
     private fun wipe(server: MinecraftServer) {
         val root = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize()
         val folder = DimensionType.getStorageFolder(SubstratumLevels.LEVEL_0, root).toAbsolutePath().normalize()

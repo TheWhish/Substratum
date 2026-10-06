@@ -41,7 +41,6 @@ allprojects {
             url = "https://thedarkcolour.github.io/KotlinForForge/"
             content { includeGroup "thedarkcolour" }
         }
-        // jars from libs/ need real coordinates, otherwise loom refuses to `include` them
         ivy {
             name = "Vendored"
             url = rootProject.file("libs")
@@ -63,7 +62,6 @@ allprojects {
 }
 
 subprojects {
-    // kotlin has to be applied before loom, or the dev launch misses build/classes/kotlin/main
     apply plugin: "org.jetbrains.kotlin.jvm"
     apply plugin: "dev.architectury.loom"
 
@@ -79,7 +77,6 @@ subprojects {
         jvmToolchain(rootProject.java_version as int)
     }
 
-    // fabric loader warns about missing classpath dirs when a module has no java sources
     def javaOutput = tasks.named("compileJava", JavaCompile).map { it.destinationDirectory }
     tasks.named("classes").configure {
         doLast { javaOutput.get().get().asFile.mkdirs() }

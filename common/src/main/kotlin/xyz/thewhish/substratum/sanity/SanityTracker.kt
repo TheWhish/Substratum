@@ -27,7 +27,7 @@ object SanityTracker {
 
     fun ticks(player: Player): Int = elapsed[player.uuid] ?: 0
 
-    fun phase(player: Player): SanityPhase = SanityPhase.of(ticks(player))
+    fun pressure(player: Player): Double = SanityPhase.pressure(ticks(player).toDouble())
 
     fun rewind(player: ServerPlayer, ticks: Int) {
         require(ticks >= 0) { "sanity rewind must be positive, got $ticks" }
@@ -49,7 +49,7 @@ object SanityTracker {
             return
         }
         val now = elapsed.merge(player.uuid, 1) { current, _ -> if (current == Int.MAX_VALUE) current else current + 1 } ?: return
-        if (now == 1 || now % SYNC_INTERVAL == 0 || SanityPhase.of(now) != SanityPhase.of(now - 1)) sync(player)
+        if (now == 1 || now % SYNC_INTERVAL == 0) sync(player)
     }
 
     private fun sync(player: ServerPlayer) = SanitySync.send(player, ticks(player))

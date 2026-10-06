@@ -1,22 +1,22 @@
 {
   "variants": {
     "clean=false": [
-      { "model": "substratum:block/ceiling_tile", "weight": 100 },
-      { "model": "substratum:block/ceiling_tile_1", "weight": 100 },
-      { "model": "substratum:block/ceiling_tile_clean3", "weight": 100 },
-      { "model": "substratum:block/ceiling_tile_clean4", "weight": 100 },
+      { "model": "substratum:block/ceiling_tile", "weight": 200 },
+      { "model": "substratum:block/ceiling_tile_1", "weight": 200 },
+      { "model": "substratum:block/ceiling_tile_clean3", "weight": 200 },
+      { "model": "substratum:block/ceiling_tile_clean4", "weight": 200 },
       { "model": "substratum:block/ceiling_tile_4", "weight": 1 },
       { "model": "substratum:block/ceiling_tile_5", "weight": 4 },
-      { "model": "substratum:block/ceiling_tile_2", "weight": 10 },
-      { "model": "substratum:block/ceiling_tile_3", "weight": 6 },
-      { "model": "substratum:block/ceiling_tile_damp", "weight": 2 },
-      { "model": "substratum:block/ceiling_tile_mould", "weight": 1 }
+      { "model": "substratum:block/ceiling_tile_2", "weight": 20 },
+      { "model": "substratum:block/ceiling_tile_3", "weight": 12 },
+      { "model": "substratum:block/ceiling_tile_damp", "weight": 4 },
+      { "model": "substratum:block/ceiling_tile_mould", "weight": 2 }
     ],
     "clean=true": [
-      { "model": "substratum:block/ceiling_tile", "weight": 100 },
-      { "model": "substratum:block/ceiling_tile_1", "weight": 100 },
-      { "model": "substratum:block/ceiling_tile_clean3", "weight": 100 },
-      { "model": "substratum:block/ceiling_tile_clean4", "weight": 100 },
+      { "model": "substratum:block/ceiling_tile", "weight": 200 },
+      { "model": "substratum:block/ceiling_tile_1", "weight": 200 },
+      { "model": "substratum:block/ceiling_tile_clean3", "weight": 200 },
+      { "model": "substratum:block/ceiling_tile_clean4", "weight": 200 },
       { "model": "substratum:block/ceiling_tile_4", "weight": 1 },
       { "model": "substratum:block/ceiling_tile_5", "weight": 4 }
     ]

@@ -5,6 +5,7 @@ import net.minecraft.core.Direction
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.util.RandomSource
 import xyz.thewhish.substratum.worldgen.MazeChunkGenerator
+import xyz.thewhish.substratum.worldgen.MazeLayout
 
 object Crawlspace {
 
@@ -33,6 +34,12 @@ object Crawlspace {
     ) {
         val mouth: BlockPos get() = BlockPos(mouthX, Y, mouthZ)
 
+        internal fun lit(layout: MazeLayout): Boolean =
+            (0..length).none { layout.columnAt(mouthX + ax * it, mouthZ + az * it) and MazeLayout.DARK_ZONE != 0 }
+
+        internal fun loaded(level: ServerLevel): Boolean =
+            (1..length).all { level.isLoaded(BlockPos(mouthX + ax * it, Y, mouthZ + az * it)) }
+
         internal fun carve(level: ServerLevel, through: Boolean): Site? {
             val cut = ArrayList<BlockPos>(length)
             for (i in 1..length) {
@@ -58,11 +65,12 @@ object Crawlspace {
         return Plan(site[0], site[1], ax, az, site[4], along)
     }
 
-    fun openFresh(level: ServerLevel, axis: Direction.Axis, random: RandomSource, through: Boolean): Site? {
+    fun planFresh(level: ServerLevel, axis: Direction.Axis, random: RandomSource): Plan? {
+        val layout = (level.chunkSource.generator as? MazeChunkGenerator)?.layout ?: return null
         repeat(FRESH_ATTEMPTS) {
             val x = (FRESH_MIN + random.nextInt(FRESH_SPAN)) * if (random.nextBoolean()) 1 else -1
             val z = (FRESH_MIN + random.nextInt(FRESH_SPAN)) * if (random.nextBoolean()) 1 else -1
-            plan(level, x, z, axis)?.carve(level, through)?.let { return it }
+            plan(level, x, z, axis)?.takeIf { it.lit(layout) }?.let { return it }
         }
         return null
     }

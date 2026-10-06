@@ -21,7 +21,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 object SubstratumCommand {
-    private const val FOOTING_RADIUS = 32
+    private const val FOOTING_RADIUS = 128
     private const val EXIT_SEARCH_RADIUS = 1024
 
     fun register(dispatcher: CommandDispatcher<CommandSourceStack>) {
@@ -29,6 +29,7 @@ object SubstratumCommand {
             Commands.literal("substratum")
                 .requires { it.hasPermission(2) }
                 .then(Commands.literal("enter").executes(::enter))
+                .then(DebugCommand.node())
                 .then(Commands.literal("rift").then(Commands.literal("spawn").executes(::riftSpawn)))
                 .then(Commands.literal("exit").then(Commands.literal("locate").executes(::exitLocate)))
                 .then(
@@ -52,7 +53,7 @@ object SubstratumCommand {
             return 0
         }
         val generator = level.chunkSource.generator as? MazeChunkGenerator
-        val footing = generator?.findFooting(MazeLayout.CENTRE, MazeLayout.CENTRE, FOOTING_RADIUS)
+        val footing = generator?.layout?.findFooting(MazeLayout.CENTRE, MazeLayout.CENTRE, FOOTING_RADIUS, lit = true)
         val x = footing?.get(0) ?: MazeLayout.CENTRE
         val z = footing?.get(1) ?: MazeLayout.CENTRE
         player.teleportTo(level, x + 0.5, (MazeChunkGenerator.FLOOR_Y + 1).toDouble(), z + 0.5, player.yRot, player.xRot)

@@ -1,6 +1,8 @@
 {
   "item.substratum.almond_water": "Almond Water",
+  "block.substratum.almond_water": "Almond Water",
   "dimension.substratum.level_0": "Level 0",
+  "entity.substratum.smiler": "Smiler",
   "block.substratum.damp_carpet": "Damp Carpet",
   "block.substratum.yellow_wallpaper": "Yellow Wallpaper",
   "block.substratum.yellow_wallpaper_top": "Yellow Wallpaper (Ceiling Line)",
@@ -30,5 +32,6 @@
   "commands.substratum.sanity.elsewhere": "Only works in Level 0",
   "subtitles.substratum.lamp_crackle": "Fluorescent lamp crackles",
   "subtitles.substratum.lamp_flicker": "Fluorescent lamp flickers",
-  "subtitles.substratum.lamp_pop": "Fluorescent lamp bursts"
+  "subtitles.substratum.lamp_pop": "Fluorescent lamp bursts",
+  "subtitles.substratum.vhs_burst": "Signal tears"
 }

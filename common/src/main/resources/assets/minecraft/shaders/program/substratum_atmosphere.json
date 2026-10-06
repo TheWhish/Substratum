@@ -18,6 +18,9 @@
         { "name": "Drain", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "Lit", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "Hands", "type": "float", "count": 1, "values": [ 1.0 ] },
-        { "name": "Haze", "type": "float", "count": 1, "values": [ 0.0 ] }
+        { "name": "Haze", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Vhs", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "VhsSeed", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "VhsShake", "type": "float", "count": 1, "values": [ 1.0 ] }
     ]
 }

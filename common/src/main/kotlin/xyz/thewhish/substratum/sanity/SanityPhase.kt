@@ -11,5 +11,8 @@ enum class SanityPhase(val startTick: Int) {
         private val DESCENDING = entries.sortedByDescending { it.startTick }
 
         fun of(ticks: Int): SanityPhase = DESCENDING.firstOrNull { ticks >= it.startTick } ?: QUIET
+
+        fun pressure(ticks: Double): Double =
+            ((ticks - DISORIENTATION.startTick) / (HUNT.startTick - DISORIENTATION.startTick)).coerceIn(0.0, 1.0)
     }
 }

@@ -62,7 +62,9 @@ object LightVolume {
     private var level: ClientLevel? = null
     private val slots = LongArray(SLOTS * SLOTS) { EMPTY }
     private val dirty = LongOpenHashSet()
-    private val column = MemoryUtil.memAlloc(16 * 16 * HEIGHT)
+    private const val FLOOR_CELLS = 16 * 16
+    private val column = MemoryUtil.memAlloc(FLOOR_CELLS * HEIGHT)
+    private val scratch = ByteArray(FLOOR_CELLS * HEIGHT)
 
     fun markDirty(cx: Int, cz: Int) {
         dirty.add(ChunkPos.asLong(cx, cz))
@@ -256,15 +258,24 @@ object LightVolume {
         dirty.remove(key)
         slots[slot(cx, cz)] = key
         val engine = level.lightEngine.getLayerListener(LightLayer.BLOCK)
-        column.clear()
         for (y in 0 until HEIGHT) {
             val worldY = BASE_Y + y
             val layer = engine.getDataLayerData(SectionPos.of(cx, worldY shr 4, cz))
-            for (z in 0 until 16) for (x in 0 until 16) {
-                column.put(((layer?.get(x, worldY and 15, z) ?: 0) * 17).toByte())
+            val row = y * FLOOR_CELLS
+            if (layer == null || layer.isDefinitelyHomogenous) {
+                scratch.fill(((layer?.get(0, 0, 0) ?: 0) * 17).toByte(), row, row + FLOOR_CELLS)
+                continue
+            }
+            val data = layer.data
+            val from = (worldY and 15) * FLOOR_CELLS / 2
+            for (i in 0 until FLOOR_CELLS / 2) {
+                val pair = data[from + i].toInt()
+                scratch[row + 2 * i] = ((pair and 0xF) * 17).toByte()
+                scratch[row + 2 * i + 1] = ((pair shr 4 and 0xF) * 17).toByte()
             }
         }
-        column.flip()
+        column.clear()
+        column.put(scratch).flip()
         val active = GlStateManager._getActiveTexture()
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT)
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, texture)

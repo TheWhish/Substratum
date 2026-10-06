@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import qouteall.imm_ptl.core.block_manipulation.BlockManipulationServer;
 
-// a survival dig through a portal finishes in tick(), after immersive portals has already dropped its redirect
 @Mixin(ServerPlayerGameMode.class)
 abstract class MixinIPServerPlayerGameMode {
 
