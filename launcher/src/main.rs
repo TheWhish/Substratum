@@ -3,10 +3,12 @@
 mod code;
 mod fetch;
 mod install;
+mod launch;
 mod vhs;
 
 use std::cell::RefCell;
 use std::path::PathBuf;
+use std::process::{Child, Command};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -14,7 +16,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use fetch::{Error, Progress};
-use slint::{PhysicalPosition, Timer, TimerMode};
+use slint::{CloseRequestResponse, ComponentHandle, PhysicalPosition, Timer, TimerMode, Weak};
 
 slint::include_modules!();
 
@@ -39,13 +41,14 @@ fn main() -> Result<(), slint::PlatformError> {
     let job: Rc<RefCell<Option<Job>>> = Rc::default();
 
     let weak = app.as_weak();
+    let root = home.clone();
     let slot = job.clone();
     app.on_install(move || {
         let Some(app) = weak.upgrade() else { return };
         if slot.borrow().is_some() {
             return;
         }
-        match home.clone() {
+        match root.clone() {
             Some(home) => {
                 *slot.borrow_mut() = Some(Job::start(home));
                 app.set_preparing(true);
@@ -56,6 +59,45 @@ fn main() -> Result<(), slint::PlatformError> {
             }
             None => app.invoke_finished(Outcome::Disk),
         }
+    });
+
+    let weak = app.as_weak();
+    let root = home.clone();
+    app.on_play(move |nick| {
+        let Some(app) = weak.upgrade() else {
+            return Launch::Failed;
+        };
+        if !launch::valid_nick(&nick) {
+            return Launch::Nick;
+        }
+        let Some(home) = &root else {
+            return Launch::Failed;
+        };
+        match launch::start(home, &nick) {
+            Ok(game) => {
+                if let Err(error) = app.hide() {
+                    eprintln!("failed to hide the launcher: {error}");
+                }
+                watch(game, app.as_weak());
+                Launch::Started
+            }
+            Err(error) => {
+                eprintln!("failed to start the game: {error}");
+                Launch::Failed
+            }
+        }
+    });
+
+    let root = home.clone();
+    app.on_open(move |place| {
+        let Some(home) = &root else { return false };
+        let logs = launch::instance(home).join("logs");
+        let path = match place {
+            Place::Logs => logs,
+            Place::Screenshots => launch::instance(home).join("screenshots"),
+            Place::LatestLog => logs.join("latest.log"),
+        };
+        path.exists() && reveal(&path)
     });
 
     let slot = job.clone();
@@ -75,13 +117,10 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    let weak = app.as_weak();
-    app.on_quit(move || {
-        if let Some(app) = weak.upgrade()
-            && let Err(error) = app.hide()
-        {
-            eprintln!("failed to close the launcher window: {error}");
-        }
+    app.on_quit(quit);
+    app.window().on_close_requested(|| {
+        quit();
+        CloseRequestResponse::HideWindow
     });
 
     let weak = app.as_weak();
@@ -101,7 +140,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let ticker = Timer::default();
     ticker.start(TimerMode::Repeated, vhs::FRAME, move || {
         let Some(app) = weak.upgrade() else { return };
-        if !app.window().is_minimized() {
+        if app.window().is_visible() && !app.window().is_minimized() {
             tape.advance(&app);
         }
         let finished = job
@@ -125,7 +164,40 @@ fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    app.run()
+    app.show()?;
+    slint::run_event_loop_until_quit()
+}
+
+fn quit() {
+    if let Err(error) = slint::quit_event_loop() {
+        eprintln!("failed to stop the launcher: {error}");
+    }
+}
+
+fn watch(mut game: Child, weak: Weak<AppWindow>) {
+    thread::spawn(move || {
+        let crashed = !game.wait().is_ok_and(|status| status.success());
+        let returned = slint::invoke_from_event_loop(move || {
+            let Some(app) = weak.upgrade() else { return };
+            app.set_crashed(crashed);
+            if let Err(error) = app.show() {
+                eprintln!("failed to show the launcher: {error}");
+            }
+        });
+        if let Err(error) = returned {
+            eprintln!("failed to return to the launcher: {error}");
+        }
+    });
+}
+
+fn reveal(path: &std::path::Path) -> bool {
+    match Command::new("explorer").arg(path).spawn() {
+        Ok(_) => true,
+        Err(error) => {
+            eprintln!("failed to open {}: {error}", path.display());
+            false
+        }
+    }
 }
 
 const SPEED_WINDOW: Duration = Duration::from_secs(1);

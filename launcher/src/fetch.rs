@@ -104,17 +104,20 @@ impl Hasher {
     }
 
     fn hex(self) -> String {
-        let digest: Vec<u8> = match self {
-            Hasher::Sha1(hasher) => hasher.finalize().to_vec(),
-            Hasher::Sha256(hasher) => hasher.finalize().to_vec(),
-        };
-        digest
-            .iter()
-            .fold(String::with_capacity(64), |mut hex, byte| {
-                let _ = write!(hex, "{byte:02x}");
-                hex
-            })
+        match self {
+            Hasher::Sha1(hasher) => hex(&hasher.finalize()),
+            Hasher::Sha256(hasher) => hex(&hasher.finalize()),
+        }
     }
+}
+
+pub fn hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
 }
 
 pub fn inside(base: &Path, relative: &str) -> Result<PathBuf> {

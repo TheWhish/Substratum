@@ -16,15 +16,22 @@ const JAVA_URL: &str = "https://launchermeta.mojang.com/v1/products/java-runtime
 const ASSETS_URL: &str = "https://resources.download.minecraft.net";
 const FABRIC_URL: &str = "https://meta.fabricmc.net/v2/versions/loader";
 const OS: &str = "windows";
+const ARCH: &str = "x86_64";
 const JAVA_PLATFORM: &str = "windows-x64";
 const BUILD_FILE: &str = "build.json";
 
 #[derive(Deserialize)]
-struct Manifest {
-    build: String,
-    minecraft: String,
-    fabric: String,
+pub struct Manifest {
+    pub build: String,
+    pub minecraft: String,
+    pub fabric: String,
     mods: Vec<Mod>,
+}
+
+impl Manifest {
+    pub fn fabric_id(&self) -> String {
+        format!("fabric-loader-{}-{}", self.fabric, self.minecraft)
+    }
 }
 
 #[derive(Deserialize)]
@@ -67,17 +74,61 @@ struct VersionRef {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Version {
-    asset_index: AssetIndexRef,
+pub struct Version {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(default)]
+    pub arguments: Arguments,
+    pub asset_index: AssetIndexRef,
     downloads: ClientDownloads,
-    libraries: Vec<Library>,
-    java_version: JavaVersion,
-    logging: Option<Logging>,
+    pub libraries: Vec<Library>,
+    pub java_version: JavaVersion,
+    pub logging: Option<Logging>,
+}
+
+#[derive(Default, Deserialize)]
+pub struct Arguments {
+    #[serde(default)]
+    pub game: Vec<Argument>,
+    #[serde(default)]
+    pub jvm: Vec<Argument>,
 }
 
 #[derive(Deserialize)]
-struct AssetIndexRef {
-    id: String,
+#[serde(untagged)]
+pub enum Argument {
+    Plain(String),
+    Ruled { rules: Vec<Rule>, value: Values },
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum Values {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl Argument {
+    pub fn values(&self) -> Vec<&str> {
+        match self {
+            Argument::Plain(value) => vec![value.as_str()],
+            Argument::Ruled { rules, .. } if !allowed(rules) => Vec::new(),
+            Argument::Ruled {
+                value: Values::One(value),
+                ..
+            } => vec![value.as_str()],
+            Argument::Ruled {
+                value: Values::Many(values),
+                ..
+            } => values.iter().map(String::as_str).collect(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct AssetIndexRef {
+    pub id: String,
     #[serde(flatten)]
     file: FileRef,
 }
@@ -88,53 +139,67 @@ struct ClientDownloads {
 }
 
 #[derive(Deserialize)]
-struct Library {
-    downloads: LibraryDownloads,
+pub struct Library {
+    pub downloads: LibraryDownloads,
     #[serde(default)]
-    rules: Vec<Rule>,
+    pub rules: Vec<Rule>,
 }
 
 #[derive(Deserialize)]
-struct LibraryDownloads {
-    artifact: Option<Artifact>,
+pub struct LibraryDownloads {
+    pub artifact: Option<Artifact>,
 }
 
 #[derive(Deserialize)]
-struct Artifact {
-    path: String,
+pub struct Artifact {
+    pub path: String,
     #[serde(flatten)]
     file: FileRef,
 }
 
 #[derive(Deserialize)]
-struct Rule {
+pub struct Rule {
     action: String,
     os: Option<Os>,
+    #[serde(default)]
+    features: HashMap<String, bool>,
+}
+
+impl Rule {
+    fn applies(&self) -> bool {
+        let os = self.os.as_ref().is_none_or(|os| {
+            os.name.as_deref().is_none_or(|name| name == OS)
+                && os.arch.as_deref().is_none_or(|arch| arch == ARCH)
+        });
+        os && self.features.values().all(|required| !required)
+    }
 }
 
 #[derive(Deserialize)]
 struct Os {
     name: Option<String>,
+    arch: Option<String>,
 }
 
 #[derive(Deserialize)]
-struct JavaVersion {
-    component: String,
+pub struct JavaVersion {
+    pub component: String,
 }
 
 #[derive(Deserialize)]
-struct Logging {
-    client: LoggingClient,
+pub struct Logging {
+    pub client: LoggingClient,
 }
 
 #[derive(Deserialize)]
-struct LoggingClient {
-    file: LogFile,
+pub struct LoggingClient {
+    pub argument: String,
+    pub file: LogFile,
 }
 
 #[derive(Deserialize)]
-struct LogFile {
-    id: String,
+pub struct LogFile {
+    pub id: String,
     #[serde(flatten)]
     file: FileRef,
 }
@@ -173,14 +238,18 @@ struct JavaDownloads {
 }
 
 #[derive(Deserialize)]
-struct FabricProfile {
-    id: String,
-    libraries: Vec<FabricLibrary>,
+#[serde(rename_all = "camelCase")]
+pub struct FabricProfile {
+    pub id: String,
+    pub main_class: String,
+    #[serde(default)]
+    pub arguments: Arguments,
+    pub libraries: Vec<FabricLibrary>,
 }
 
 #[derive(Deserialize)]
-struct FabricLibrary {
-    name: String,
+pub struct FabricLibrary {
+    pub name: String,
     url: String,
     sha1: Option<String>,
     size: Option<u64>,
@@ -190,11 +259,26 @@ pub fn home() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|appdata| PathBuf::from(appdata).join("Substratum"))
 }
 
+pub fn manifest(home: &Path) -> Result<Manifest> {
+    load(&home.join(BUILD_FILE))
+}
+
 pub fn installed(home: &Path) -> Option<String> {
-    let bytes = fs::read(home.join(BUILD_FILE)).ok()?;
-    serde_json::from_slice::<Manifest>(&bytes)
-        .ok()
-        .map(|manifest| manifest.build)
+    manifest(home).ok().map(|manifest| manifest.build)
+}
+
+pub fn version_dir(home: &Path, id: &str) -> Result<PathBuf> {
+    inside(&home.join("versions"), id)
+}
+
+pub fn fabric_profile(home: &Path, manifest: &Manifest) -> Result<PathBuf> {
+    let id = manifest.fabric_id();
+    Ok(version_dir(home, &id)?.join(format!("{id}.json")))
+}
+
+pub fn load<T: DeserializeOwned>(path: &Path) -> Result<T> {
+    let bytes = fs::read(path).map_err(io_error(path))?;
+    parse(&bytes, &path.display().to_string())
 }
 
 pub fn run(home: &Path, progress: &Progress) -> Result<String> {
@@ -221,7 +305,7 @@ fn minecraft(agent: &Agent, home: &Path, id: &str) -> Result<Vec<Download>> {
         .into_iter()
         .find(|version| version.id == id)
         .ok_or_else(|| Error::Invalid(format!("Minecraft {id} is not published")))?;
-    let version_dir = inside(&home.join("versions"), id)?;
+    let version_dir = version_dir(home, id)?;
     let bytes = fetch::bytes(agent, &reference.url, Some(&Hash::sha1(&reference.sha1)?))?;
     save(&version_dir.join(format!("{id}.json")), &bytes)?;
     let version: Version = parse(&bytes, &reference.url)?;
@@ -258,15 +342,14 @@ fn minecraft(agent: &Agent, home: &Path, id: &str) -> Result<Vec<Download>> {
     Ok(downloads)
 }
 
-fn allowed(rules: &[Rule]) -> bool {
+pub fn allowed(rules: &[Rule]) -> bool {
     rules.is_empty()
-        || rules.iter().fold(false, |allowed, rule| {
-            let name = rule.os.as_ref().and_then(|os| os.name.as_deref());
-            match name.is_none_or(|name| name == OS) {
+        || rules
+            .iter()
+            .fold(false, |allowed, rule| match rule.applies() {
                 true => rule.action == "allow",
                 false => allowed,
-            }
-        })
+            })
 }
 
 fn assets(agent: &Agent, home: &Path, index: &AssetIndexRef) -> Result<Vec<Download>> {
@@ -339,10 +422,13 @@ fn fabric(agent: &Agent, home: &Path, manifest: &Manifest) -> Result<Vec<Downloa
     );
     let bytes = fetch::bytes(agent, &url, None)?;
     let profile: FabricProfile = parse(&bytes, &url)?;
-    save(
-        &inside(&home.join("versions"), &format!("{0}/{0}.json", profile.id))?,
-        &bytes,
-    )?;
+    if profile.id != manifest.fabric_id() {
+        return Err(Error::Invalid(format!(
+            "unexpected Fabric profile {}",
+            profile.id
+        )));
+    }
+    save(&fabric_profile(home, manifest)?, &bytes)?;
 
     let libraries = home.join("libraries");
     profile
@@ -369,7 +455,7 @@ fn fabric(agent: &Agent, home: &Path, manifest: &Manifest) -> Result<Vec<Downloa
         .collect()
 }
 
-fn maven_path(name: &str) -> Result<String> {
+pub fn maven_path(name: &str) -> Result<String> {
     let parts: Vec<&str> = name.split(':').collect();
     let (group, artifact, version, classifier) = match parts[..] {
         [group, artifact, version] => (group, artifact, version, String::new()),
@@ -436,28 +522,43 @@ fn save(path: &Path, bytes: &[u8]) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn rule(action: &str, os: Option<&str>) -> Rule {
-        Rule {
-            action: action.to_owned(),
-            os: Some(Os {
-                name: os.map(str::to_owned),
-            }),
-        }
+    fn rules(json: &str) -> Vec<Rule> {
+        serde_json::from_str(json).unwrap()
     }
 
     #[test]
     fn rules_follow_the_last_matching_entry() {
         assert!(allowed(&[]));
-        assert!(allowed(&[rule("allow", Some("windows"))]));
-        assert!(!allowed(&[rule("allow", Some("osx"))]));
-        assert!(!allowed(&[
-            rule("allow", None),
-            rule("disallow", Some("windows"))
-        ]));
-        assert!(allowed(&[
-            rule("allow", None),
-            rule("disallow", Some("linux"))
-        ]));
+        assert!(allowed(&rules(
+            r#"[{"action":"allow","os":{"name":"windows"}}]"#
+        )));
+        assert!(!allowed(&rules(
+            r#"[{"action":"allow","os":{"name":"osx"}}]"#
+        )));
+        assert!(!allowed(&rules(
+            r#"[{"action":"allow"},{"action":"disallow","os":{"name":"windows"}}]"#
+        )));
+        assert!(allowed(&rules(
+            r#"[{"action":"allow"},{"action":"disallow","os":{"name":"linux"}}]"#
+        )));
+        assert!(!allowed(&rules(
+            r#"[{"action":"allow","os":{"arch":"x86"}}]"#
+        )));
+        assert!(!allowed(&rules(
+            r#"[{"action":"allow","features":{"is_demo_user":true}}]"#
+        )));
+    }
+
+    #[test]
+    fn arguments_expand_only_allowed_values() {
+        let arguments: Vec<Argument> = serde_json::from_str(
+            r#"["--plain",
+                {"rules":[{"action":"allow","os":{"name":"windows"}}],"value":["-a","-b"]},
+                {"rules":[{"action":"allow","features":{"has_custom_resolution":true}}],"value":"--width"}]"#,
+        )
+        .unwrap();
+        let values: Vec<&str> = arguments.iter().flat_map(Argument::values).collect();
+        assert_eq!(values, ["--plain", "-a", "-b"]);
     }
 
     #[test]

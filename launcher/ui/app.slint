@@ -10,6 +10,10 @@ enum Panel { play, profile, settings }
 
 export enum Outcome { done, cancelled, network, disk, corrupt, failed }
 
+export enum Launch { started, nick, failed }
+
+export enum Place { logs, screenshots, latest-log }
+
 export component AppWindow inherits Window {
     in property <string> version;
     in property <image> noise;
@@ -31,7 +35,10 @@ export component AppWindow inherits Window {
     in property <float> progress;
     in property <float> speed;
     in property <bool> downloading;
+    in-out property <bool> crashed;
     callback quit();
+    callback play(string) -> Launch;
+    callback open(Place) -> bool;
     callback install();
     callback cancel();
     callback drag-window(length, length);
@@ -107,22 +114,35 @@ export component AppWindow inherits Window {
         if root.busy {
             return;
         }
+        root.crashed = false;
         if root.build == "" {
             root.install();
             return;
         }
-        root.say(@tr("ЗАПУСК ИГРЫ ПОКА НЕДОСТУПЕН"), false);
+        let launch = root.play(root.nick == "" ? "PLAYER" : root.nick);
+        if launch == Launch.nick {
+            root.say(@tr("НИК: 3–16 ЛАТИНСКИХ БУКВ, ЦИФР ИЛИ _"), true);
+        } else if launch == Launch.failed {
+            root.say(@tr("НЕ УДАЛОСЬ ЗАПУСТИТЬ ИГРУ, ПРОВЕРЬТЕ ВЕРСИЮ В НАСТРОЙКАХ"), true);
+        }
     }
 
     function repair() {
         if !root.busy {
+            root.crashed = false;
             root.install();
+        }
+    }
+
+    function reveal(place: Place, missing: string) {
+        if !root.open(place) {
+            root.say(missing, false);
         }
     }
 
     public function finished(outcome: Outcome) {
         if outcome == Outcome.done {
-            root.say(@tr("СБОРКА УСТАНОВЛЕНА"), false);
+            root.say(@tr("ВЕРСИЯ УСТАНОВЛЕНА"), false);
         } else if outcome == Outcome.cancelled {
             root.say(@tr("ЗАГРУЗКА ОТМЕНЕНА"), false);
         } else if outcome == Outcome.network {
@@ -132,7 +152,7 @@ export component AppWindow inherits Window {
         } else if outcome == Outcome.corrupt {
             root.say(@tr("ФАЙЛ ПРИШЁЛ ПОВРЕЖДЁННЫМ, ПОВТОРИТЕ ЗАГРУЗКУ"), true);
         } else {
-            root.say(@tr("НЕ УДАЛОСЬ УСТАНОВИТЬ СБОРКУ"), true);
+            root.say(@tr("НЕ УДАЛОСЬ УСТАНОВИТЬ ВЕРСИЮ"), true);
         }
     }
 
@@ -146,7 +166,10 @@ export component AppWindow inherits Window {
         if root.busy {
             return @tr("ЗАГРУЗКА {}%", Math.floor(root.progress * 100));
         }
-        return root.build == "" ? @tr("СБОРКА НЕ УСТАНОВЛЕНА") : @tr("СБОРКА {}", root.build.to-uppercase());
+        if root.crashed {
+            return @tr("ИГРА ВЫЛЕТЕЛА");
+        }
+        return root.build == "" ? @tr("ВЕРСИЯ НЕ УСТАНОВЛЕНА") : @tr("ВЕРСИЯ {}", root.build.to-uppercase());
     }
 
     panel-switch := Timer {
@@ -326,8 +349,8 @@ export component AppWindow inherits Window {
                                 if root.panel == Panel.settings: SettingsPanel {
                                     version: root.version;
                                     repair => { root.repair(); }
-                                    open-logs => { root.say(@tr("ЛОГОВ ПОКА НЕТ"), false); }
-                                    open-screenshots => { root.say(@tr("СКРИНШОТОВ ПОКА НЕТ"), false); }
+                                    open-logs => { root.reveal(Place.logs, @tr("ЛОГОВ ПОКА НЕТ")); }
+                                    open-screenshots => { root.reveal(Place.screenshots, @tr("СКРИНШОТОВ ПОКА НЕТ")); }
                                 }
                             }
 
@@ -352,13 +375,24 @@ export component AppWindow inherits Window {
 
                             Osd {
                                 text: root.message != "" ? root.message : root.status();
-                                color: root.message == "" ? Theme.text-mute : root.alarm ? Theme.rec : Theme.text;
+                                color: root.message != "" ? (root.alarm ? Theme.rec : Theme.text) : root.crashed ? Theme.rec : Theme.text-mute;
                                 horizontal-stretch: 1;
                                 animate color { duration: Theme.hover; easing: ease-out; }
                             }
                             if root.busy && root.downloading && root.message == "": Osd {
                                 text: @tr("{}.{} МБ/С", Math.floor(Math.round(root.speed * 10) / 10), Math.mod(Math.round(root.speed * 10), 10));
                                 horizontal-alignment: right;
+                            }
+                            if root.crashed && root.message == "": Osd {
+                                text: @tr("ОТКРЫТЬ ЛОГ");
+                                color: log-area.has-hover ? Theme.text : Theme.text-mute;
+                                horizontal-alignment: right;
+                                animate color { duration: Theme.hover; easing: ease-out; }
+
+                                log-area := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.reveal(Place.latest-log, @tr("ЛОГОВ ПОКА НЕТ")); }
+                                }
                             }
                         }
                         Rectangle {
