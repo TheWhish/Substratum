@@ -42,7 +42,7 @@ processResources {
     filesMatching("fabric.mod.json") {
         expand rootProject.ext.modMetadata
     }
-    from(rootProject.file("LICENSE")) { rename { "LICENSE_${rootProject.mod_id}" } }
+    from(rootProject.file("../LICENSE")) { rename { "LICENSE_${rootProject.mod_id}" } }
 }
 
 shadowJar {
