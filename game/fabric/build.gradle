@@ -7,6 +7,10 @@ architectury {
     fabric()
 }
 
+base {
+    archivesName = rootProject.archives_name
+}
+
 configurations {
     common {
         canBeResolved = true

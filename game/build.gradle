@@ -28,7 +28,7 @@ allprojects {
     apply plugin: "java"
     apply plugin: "architectury-plugin"
 
-    version = "${rootProject.mod_version}+${rootProject.minecraft_version}"
+    version = rootProject.mod_version
     group = rootProject.maven_group
 
     repositories {
