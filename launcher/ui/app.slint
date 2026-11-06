@@ -1,86 +1,289 @@
-component PlayButton inherits Rectangle {
-    in property <string> text;
-    callback clicked;
+import "../assets/fonts/IBMPlexMono-Regular.ttf";
+import "../assets/fonts/IBMPlexMono-Medium.ttf";
+import "../assets/fonts/VT323-Regular.ttf";
+import { Theme } from "theme.slint";
+import { Logo, VhsLayer } from "vhs.slint";
+import { MenuItem, Osd, RecDot, WindowAction, WindowButton } from "widgets.slint";
+import { PlayPanel, ProfilePanel, SettingsPanel } from "pages.slint";
 
-    width: 280px;
-    height: 64px;
-    border-radius: 3px;
-    background: area.pressed ? #b9a64c : area.has-hover ? #eedd80 : #d8c66a;
-    drop-shadow-blur: area.has-hover ? 36px : 14px;
-    drop-shadow-color: #f0df8055;
-    animate background { duration: 140ms; }
-    animate drop-shadow-blur { duration: 260ms; easing: ease-out; }
-
-    Text {
-        text: root.text;
-        color: #1b1808;
-        font-size: 22px;
-        font-weight: 800;
-        letter-spacing: 6px;
-    }
-
-    area := TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
-    }
-}
+enum Panel { play, profile, settings }
 
 export component AppWindow inherits Window {
-    in property <string> status;
-    callback play();
+    in property <string> version;
+    in property <image> noise;
+    in property <image> scanlines;
+    in property <bool> tracking;
+    in property <duration> tracking-time;
+    in property <bool> logo-glitch;
+    in property <length> glitch-shift;
+    in property <int> seconds;
+    in property <bool> blink;
+    in property <string> team-code;
+    in property <[string]> team-cells;
+    in property <[string]> join-cells;
+    in-out property <string> join-text;
+    in-out property <string> nick;
+    callback quit();
+    callback drag-window(length, length);
+    callback join-edited(string);
 
-    property <bool> shown;
+    property <Panel> panel: Panel.play;
+    property <Panel> target: Panel.play;
+    property <bool> rewinding;
+    property <bool> powered;
+    property <string> message;
 
     title: "Substratum";
-    preferred-width: 1100px;
-    preferred-height: 640px;
-    min-width: 820px;
-    min-height: 500px;
-    background: #070604;
+    no-frame: true;
+    width: 1100px;
+    height: 640px;
+    background: Theme.bg;
+    default-font-family: "IBM Plex Mono";
+    default-font-size: Theme.body-size;
+    forward-focus: keys;
 
-    init => { shown = true; }
-
-    Rectangle {
-        background: @radial-gradient(circle, #3b3416 0%, #17140a 55%, #070604 100%);
+    init => {
+        root.powered = true;
     }
 
-    VerticalLayout {
-        opacity: shown ? 1 : 0;
-        animate opacity { duration: 1200ms; easing: ease-out; }
-        padding: 64px;
-        spacing: 14px;
-        alignment: end;
+    function pad(value: int) -> string {
+        return value < 10 ? "0" + value : "" + value;
+    }
 
-        Text {
-            text: "SUBSTRATUM";
-            color: #efe3a6;
-            font-size: 64px;
-            font-weight: 900;
-            letter-spacing: 12px;
+    function timecode() -> string {
+        return root.pad(Math.floor(root.seconds / 3600)) + ":" + root.pad(Math.mod(Math.floor(root.seconds / 60), 60)) + ":" + root.pad(Math.mod(root.seconds, 60));
+    }
+
+    function index-of(panel: Panel) -> int {
+        return panel == Panel.play ? 0 : panel == Panel.profile ? 1 : 2;
+    }
+
+    function panel-at(index: int) -> Panel {
+        return index == 0 ? Panel.play : index == 1 ? Panel.profile : Panel.settings;
+    }
+
+    function show(next: Panel) {
+        if next == root.target {
+            return;
         }
+        root.target = next;
+        root.rewinding = true;
+        panel-switch.running = true;
+        panel-switch.restart();
+    }
 
-        Text {
-            text: "Уровень 0 ждёт";
-            color: #a89a5c;
-            font-size: 18px;
-            letter-spacing: 2px;
+    function say(text: string) {
+        root.message = text;
+        message-timer.running = true;
+        message-timer.restart();
+    }
+
+    function launch() {
+        root.say(@tr("СБОРКА ЕЩЁ НЕ УСТАНОВЛЕНА"));
+    }
+
+    panel-switch := Timer {
+        interval: Theme.page-out;
+        running: false;
+        triggered => {
+            root.panel = root.target;
+            root.rewinding = false;
+            self.running = false;
         }
+    }
 
-        Rectangle { height: 26px; }
+    message-timer := Timer {
+        interval: Theme.message;
+        running: false;
+        triggered => {
+            root.message = "";
+            self.running = false;
+        }
+    }
 
-        HorizontalLayout {
-            alignment: start;
-            PlayButton {
-                text: "ИГРАТЬ";
-                clicked => { root.play(); }
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.UpArrow {
+                root.show(root.panel-at(Math.mod(root.index-of(root.target) + 2, 3)));
+                return accept;
             }
+            if event.text == Key.DownArrow {
+                root.show(root.panel-at(Math.mod(root.index-of(root.target) + 1, 3)));
+                return accept;
+            }
+            if event.text == Key.Escape {
+                root.show(Panel.play);
+                return accept;
+            }
+            if event.text == Key.Return && root.panel == Panel.play {
+                root.launch();
+                return accept;
+            }
+            return reject;
         }
 
-        Text {
-            text: root.status;
-            color: #8c8150;
-            font-size: 14px;
-            height: 20px;
+        Rectangle {
+            transform-scale-y: root.powered ? 100% : 0.5%;
+            opacity: root.powered ? 1 : 0;
+            animate transform-scale-y, opacity { duration: Theme.power-on; easing: ease-out; }
+
+            Rectangle {
+                height: Theme.edge + Theme.osd-line + Theme.gap / 2;
+                y: 0px;
+
+                TouchArea {
+                    moved => {
+                        root.drag-window(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+                    }
+                }
+            }
+
+            Rectangle {
+                x: root.glitch-shift;
+
+                VerticalLayout {
+                    padding-left: Theme.edge;
+                    padding-right: Theme.edge;
+                    padding-top: Theme.frame - 4px;
+                    padding-bottom: Theme.frame - 3px;
+                    spacing: 0px;
+
+                    HorizontalLayout {
+                        height: Theme.osd-line;
+                        spacing: 10px;
+                        alignment: start;
+
+                        VerticalLayout {
+                            alignment: center;
+                            RecDot { opacity: root.blink ? 1 : 0; }
+                        }
+                        Osd { text: "REC"; color: Theme.text; }
+                        Osd { text: "SP  " + root.timecode(); }
+                    }
+
+                    Rectangle { height: Theme.osd-gap - 3px; }
+
+                    Logo { glitch: root.logo-glitch; }
+
+                    Rectangle { height: 21px; }
+                    Rectangle { height: 1px; background: Theme.line; }
+                    Rectangle { height: 19px; }
+
+                    HorizontalLayout {
+                        vertical-stretch: 1;
+                        spacing: 0px;
+
+                        Rectangle {
+                            width: Theme.menu-width;
+
+                            VerticalLayout {
+                                y: -9px;
+                                alignment: start;
+
+                                MenuItem {
+                                    label: @tr("ИГРАТЬ");
+                                    active: root.target == Panel.play;
+                                    activated => { root.show(Panel.play); }
+                                }
+                                MenuItem {
+                                    label: @tr("ПРОФИЛЬ");
+                                    active: root.target == Panel.profile;
+                                    activated => { root.show(Panel.profile); }
+                                }
+                                MenuItem {
+                                    label: @tr("НАСТРОЙКИ");
+                                    active: root.target == Panel.settings;
+                                    activated => { root.show(Panel.settings); }
+                                }
+                                MenuItem {
+                                    label: @tr("ВЫХОД");
+                                    activated => { root.quit(); }
+                                }
+                            }
+                        }
+
+                        Rectangle { width: Theme.gap; }
+                        Rectangle { width: 1px; background: Theme.line; }
+                        Rectangle { width: Theme.gap - 1px; }
+
+                        Rectangle {
+                            horizontal-stretch: 1;
+
+                            Rectangle {
+                                x: root.rewinding ? 8px : 0px;
+                                width: parent.width;
+                                height: parent.height;
+                                opacity: root.rewinding ? 0 : 1;
+                                animate x, opacity {
+                                    duration: root.rewinding ? Theme.page-out : Theme.page-in;
+                                    easing: ease-in-out;
+                                }
+
+                                if root.panel == Panel.play: PlayPanel {
+                                    nick: root.nick;
+                                    team-code: root.team-code;
+                                    team-cells: root.team-cells;
+                                    join-cells: root.join-cells;
+                                    join-text <=> root.join-text;
+                                    blink: root.blink;
+                                    join-edited(text) => { root.join-edited(text); }
+                                    join => { root.say(@tr("СВЯЗЬ С КОМАНДОЙ ПОКА НЕДОСТУПНА")); }
+                                    launch => { root.launch(); }
+                                }
+                                if root.panel == Panel.profile: ProfilePanel {
+                                    nick <=> root.nick;
+                                }
+                                if root.panel == Panel.settings: SettingsPanel {
+                                    version: root.version;
+                                    repair => { root.say(@tr("СБОРКА ЕЩЁ НЕ УСТАНОВЛЕНА")); }
+                                    open-logs => { root.say(@tr("ЛОГОВ ПОКА НЕТ")); }
+                                    open-screenshots => { root.say(@tr("СКРИНШОТОВ ПОКА НЕТ")); }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { height: Theme.osd-gap - 5px; }
+
+                    HorizontalLayout {
+                        height: Theme.osd-line;
+
+                        Osd {
+                            text: root.message != "" ? root.message : @tr("СБОРКА НЕ УСТАНОВЛЕНА");
+                            color: root.message != "" ? Theme.text : Theme.text-mute;
+                            horizontal-stretch: 1;
+                            animate color { duration: Theme.hover; easing: ease-out; }
+                        }
+                        Rectangle {
+                            width: date.preferred-width;
+
+                            date := Osd { x: 2px; text: @tr("ОКТ. 08 1996   AM 03:12"); }
+                        }
+                    }
+                }
+            }
+
+            WindowButton {
+                x: root.width - Theme.edge - 21px - 31px;
+                y: Theme.frame - 11px;
+                action: WindowAction.minimize;
+                clicked => { root.minimized = true; }
+            }
+            WindowButton {
+                x: root.width - Theme.edge - 21px;
+                y: Theme.frame - 11px;
+                action: WindowAction.close;
+                clicked => { root.quit(); }
+            }
+
+            VhsLayer {
+                noise: root.noise;
+                scanlines: root.scanlines;
+                noise-boost: root.rewinding ? 0.3 : root.glitch-shift != 0px ? 0.12 : 0;
+                tracking: root.tracking;
+                tracking-time: root.tracking-time;
+                animate noise-boost { duration: Theme.page-out; easing: ease-out; }
+            }
         }
     }
 }

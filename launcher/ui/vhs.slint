@@ -1,0 +1,74 @@
+import { Theme } from "theme.slint";
+
+export component Logo inherits VerticalLayout {
+    in property <bool> glitch;
+
+    property <length> split: root.glitch ? 3px : 1px;
+
+    spacing: 12px;
+
+    Rectangle {
+        height: Theme.logo-glyph;
+
+        for layer in 3: Text {
+            x: -3px + (layer == 0 ? -root.split : layer == 1 ? root.split : 0px);
+            y: -Theme.logo-ascent;
+            text: "SUBSTRATUM";
+            font-family: Theme.logo-font;
+            font-size: Theme.logo-size;
+            color: layer == 0 ? #ff3c288c : layer == 1 ? #3cc8ff73 : Theme.text;
+        }
+    }
+
+    Text {
+        x: -1px;
+        height: Theme.osd-line;
+        text: "FOUND FOOTAGE · NO SIGNAL";
+        color: Theme.text-mute;
+        font-size: Theme.caption-size;
+        letter-spacing: Theme.caption-size * 0.3;
+        vertical-alignment: center;
+    }
+}
+
+export component VhsLayer inherits Rectangle {
+    in property <image> noise;
+    in property <image> scanlines;
+    in property <float> noise-boost;
+    in property <bool> tracking;
+    in property <duration> tracking-time;
+
+    Image {
+        width: 100%;
+        height: 100%;
+        source: root.noise;
+        image-fit: fill;
+        image-rendering: pixelated;
+        opacity: 0.06 + root.noise-boost;
+    }
+
+    Image {
+        width: 100%;
+        height: 100%;
+        source: root.scanlines;
+        horizontal-tiling: repeat;
+        vertical-tiling: repeat;
+        image-rendering: pixelated;
+    }
+
+    band := Rectangle {
+        y: -self.height;
+        width: 100%;
+        height: 18px;
+        background: #ffffff0d;
+    }
+
+    states [
+        passing when root.tracking: {
+            band.y: root.height;
+            in {
+                animate band.y { duration: root.tracking-time; easing: linear; }
+            }
+        }
+    ]
+}

@@ -1,0 +1,330 @@
+import { Theme } from "theme.slint";
+import { CodeCells, LaunchButton, Marker, Osd, PanelHeader, Setting, SlotCard } from "widgets.slint";
+
+export component PlayPanel inherits VerticalLayout {
+    in property <string> nick;
+    in property <string> team-code;
+    in property <[string]> team-cells;
+    in property <[string]> join-cells;
+    in-out property <string> join-text;
+    in property <bool> blink;
+    callback join-edited(string);
+    callback join();
+    callback launch();
+
+    property <length> card-width: (root.width - 3 * Theme.inner-gap) / 4;
+    property <length> code-width: 8 * 32px + 7 * 4px + 16px + 4px;
+    property <int> flash: -100;
+    property <bool> copied;
+    property <bool> join-ready: root.join-text.character-count == 8;
+
+    function copy-code() {
+        clipboard.select-all();
+        clipboard.copy();
+        clipboard.clear-selection();
+        root.flash = 0;
+        root.copied = true;
+        flash-timer.running = true;
+        copied-timer.running = true;
+        copied-timer.restart();
+    }
+
+    spacing: 0px;
+
+    flash-timer := Timer {
+        interval: 35ms;
+        running: false;
+        triggered => {
+            root.flash += 1;
+            if root.flash > 14 {
+                root.flash = -100;
+                self.running = false;
+            }
+        }
+    }
+
+    copied-timer := Timer {
+        interval: Theme.message;
+        running: false;
+        triggered => {
+            root.copied = false;
+            self.running = false;
+        }
+    }
+
+    clipboard := TextInput {
+        width: 0px;
+        height: 0px;
+        text: root.team-code;
+        read-only: true;
+        visible: false;
+    }
+
+    PanelHeader { title: @tr("КОМАНДА"); detail: "1 / 4"; }
+    Rectangle { height: Theme.inner-gap; }
+
+    HorizontalLayout {
+        spacing: Theme.inner-gap;
+        vertical-stretch: 1;
+        SlotCard { width: root.card-width; number: "01"; nick: root.nick == "" ? "PLAYER" : root.nick; host: true; }
+        SlotCard { width: root.card-width; number: "02"; }
+        SlotCard { width: root.card-width; number: "03"; }
+        SlotCard { width: root.card-width; number: "04"; }
+    }
+
+    Rectangle { height: Theme.gap; }
+
+    HorizontalLayout {
+        spacing: Theme.inner-gap;
+
+        VerticalLayout {
+            spacing: 8px;
+            width: (root.width - Theme.inner-gap) / 2;
+
+            HorizontalLayout {
+                width: root.code-width;
+                Osd { text: @tr("КОД КОМАНДЫ"); horizontal-stretch: 1; }
+                Osd {
+                    text: root.copied ? @tr("СКОПИРОВАНО") : @tr("КОПИРОВАТЬ");
+                    color: root.copied ? Theme.tape : copy-area.has-hover ? Theme.text : Theme.text-mute;
+                    animate color { duration: Theme.hover; easing: ease-out; }
+
+                    copy-area := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.copy-code(); }
+                    }
+                }
+            }
+            Rectangle {
+                width: root.code-width;
+                height: 40px;
+
+                CodeCells { chars: root.team-cells; flash: root.flash; }
+                TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.copy-code(); }
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 8px;
+            width: (root.width - Theme.inner-gap) / 2;
+
+            HorizontalLayout {
+                width: root.code-width;
+                Osd { text: @tr("ВОЙТИ ПО КОДУ"); horizontal-stretch: 1; }
+                Osd {
+                    text: @tr("ВОЙТИ");
+                    color: !root.join-ready ? Theme.text-dim : join-area.has-hover ? Theme.text : Theme.text-mute;
+
+                    join-area := TouchArea {
+                        enabled: root.join-ready;
+                        mouse-cursor: pointer;
+                        clicked => { root.join(); }
+                    }
+                }
+            }
+            Rectangle {
+                width: root.code-width;
+                height: 40px;
+
+                CodeCells {
+                    chars: root.join-cells;
+                    cursor: input.has-focus && !root.join-ready ? root.join-text.character-count : -1;
+                    blink: root.blink;
+                }
+                input := TextInput {
+                    text <=> root.join-text;
+                    color: transparent;
+                    selection-background-color: transparent;
+                    selection-foreground-color: transparent;
+                    text-cursor-width: 0px;
+                    single-line: true;
+                    edited => { root.join-edited(self.text); }
+                    accepted => {
+                        if root.join-ready {
+                            root.join();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Rectangle { height: Theme.gap; }
+
+    LaunchButton {
+        label: @tr("ЗАПУСК");
+        hint: "ENTER";
+        clicked => { root.launch(); }
+    }
+}
+
+component SuitTile inherits Rectangle {
+    in property <color> top;
+    in property <color> bottom;
+    in property <bool> selected;
+    in property <string> label;
+    callback clicked();
+
+    width: 56px;
+    height: 56px;
+    background: root.top;
+    border-width: 1px;
+    border-color: root.selected || area.has-hover ? Theme.text : Theme.line;
+    animate border-color { duration: Theme.hover; easing: ease-out; }
+
+    Rectangle {
+        y: parent.height - self.height;
+        height: 20px;
+        background: root.bottom;
+    }
+    if root.label != "": Osd { text: root.label; }
+
+    area := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component ProfilePanel inherits HorizontalLayout {
+    in-out property <string> nick;
+
+    property <int> suit;
+
+    spacing: Theme.gap;
+
+    VerticalLayout {
+        spacing: 0px;
+        horizontal-stretch: 1;
+
+        PanelHeader { title: @tr("ПРОФИЛЬ"); }
+        Rectangle { height: Theme.inner-gap; }
+        Osd { text: @tr("НИК"); }
+        Rectangle { height: 8px; }
+        Rectangle {
+            height: 32px;
+
+            nick-input := TextInput {
+                x: 0px;
+                width: parent.width;
+                text <=> root.nick;
+                color: Theme.text;
+                font-size: Theme.code-size;
+                single-line: true;
+                vertical-alignment: center;
+                selection-background-color: Theme.line;
+                selection-foreground-color: Theme.text;
+            }
+            if root.nick == "": Text {
+                x: 0px;
+                width: parent.width;
+                text: "PLAYER";
+                color: Theme.text-dim;
+                font-size: Theme.code-size;
+                vertical-alignment: center;
+            }
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: nick-input.has-focus ? Theme.text : Theme.text-dim;
+                animate background { duration: Theme.hover; easing: ease-out; }
+            }
+        }
+        Rectangle { height: 20px; }
+        Setting { label: @tr("МОДЕЛЬ РУК"); value: @tr("КЛАССИЧЕСКАЯ"); selector: true; }
+        Rectangle { height: 20px; }
+        Osd { text: @tr("СКАФАНДР"); }
+        Rectangle { height: 8px; }
+        HorizontalLayout {
+            spacing: 12px;
+            alignment: start;
+
+            SuitTile { top: #c9b25a; bottom: #8a7a3a; selected: root.suit == 0; clicked => { root.suit = 0; } }
+            SuitTile { top: #5f6b4a; bottom: #3c4430; selected: root.suit == 1; clicked => { root.suit = 1; } }
+            SuitTile { top: #7a3b2e; bottom: #4a241c; selected: root.suit == 2; clicked => { root.suit = 2; } }
+            SuitTile { top: #3a3a38; bottom: #222220; selected: root.suit == 3; clicked => { root.suit = 3; } }
+            SuitTile { top: transparent; bottom: transparent; label: "PNG"; selected: root.suit == 4; clicked => { root.suit = 4; } }
+        }
+        Rectangle { vertical-stretch: 1; }
+    }
+
+    Rectangle {
+        width: 180px;
+        border-width: 1px;
+        border-color: Theme.line;
+
+        Rectangle {
+            width: 112px;
+            height: 224px;
+            y: (parent.height - Theme.osd-line - 12px - self.height) / 2;
+
+            Rectangle { x: 28px; y: 0px; width: 56px; height: 56px; background: #c9b25a; }
+            Rectangle { x: 28px; y: 56px; width: 56px; height: 84px; background: #b29d4e; }
+            Rectangle { x: 0px; y: 56px; width: 28px; height: 84px; background: #a08c45; }
+            Rectangle { x: 84px; y: 56px; width: 28px; height: 84px; background: #a08c45; }
+            Rectangle { x: 28px; y: 140px; width: 28px; height: 84px; background: #8a7a3a; }
+            Rectangle { x: 56px; y: 140px; width: 28px; height: 84px; background: #7d6f35; }
+        }
+
+        HorizontalLayout {
+            y: parent.height - 12px - self.height;
+            height: Theme.osd-line;
+            spacing: 12px;
+            alignment: center;
+
+            VerticalLayout { alignment: center; Marker { left: true; ink: Theme.text-mute; } }
+            Osd { text: @tr("ПЕРЕД"); }
+            VerticalLayout { alignment: center; Marker { ink: Theme.text-mute; } }
+        }
+    }
+}
+
+component Group inherits VerticalLayout {
+    in property <string> title;
+
+    spacing: 4px;
+
+    Osd { text: root.title; letter-spacing: 1.5px; color: Theme.text-dim; }
+    @children
+}
+
+export component SettingsPanel inherits GridLayout {
+    in property <string> version;
+    callback repair();
+    callback open-logs();
+    callback open-screenshots();
+
+    spacing-horizontal: Theme.gap;
+    spacing-vertical: Theme.gap;
+
+    Row {
+        Group {
+            title: @tr("ИГРА");
+            Setting { label: @tr("ПАМЯТЬ"); value: @tr("АВТО"); selector: true; }
+            Setting { label: @tr("ОКНО"); value: @tr("ПОЛНЫЙ ЭКРАН"); selector: true; }
+            Setting { label: @tr("ЯЗЫК"); value: @tr("РУССКИЙ"); selector: true; }
+            Setting { label: @tr("ПРИ ЗАПУСКЕ"); value: @tr("СКРЫТЬ"); selector: true; }
+        }
+        Group {
+            title: @tr("ФАЙЛЫ");
+            Setting { label: @tr("ПАПКА"); value: "%APPDATA%\\SUBSTRATUM"; }
+            Setting { label: @tr("ПРОВЕРИТЬ И ПОЧИНИТЬ"); action: true; activated => { root.repair(); } }
+            Setting { label: @tr("ОТКРЫТЬ ЛОГИ"); action: true; activated => { root.open-logs(); } }
+            Setting { label: @tr("ОТКРЫТЬ СКРИНШОТЫ"); action: true; activated => { root.open-screenshots(); } }
+        }
+    }
+    Row {
+        Group {
+            title: @tr("СИСТЕМА");
+            Setting { label: "LAUNCHER"; value: "v" + root.version; }
+            Setting { label: "BUILD"; value: "MC 1.21.1"; }
+        }
+        Group {
+            title: " ";
+            Setting { label: "UI"; value: "SLINT 1.18"; }
+            Setting { label: "LICENSE"; value: "MIT · FONTS OFL"; }
+        }
+    }
+}
