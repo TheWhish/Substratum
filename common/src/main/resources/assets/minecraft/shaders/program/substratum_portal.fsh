@@ -2,6 +2,8 @@
 
 uniform sampler2D DiffuseSampler;
 uniform sampler2D LightSampler;
+uniform sampler2D BloomSampler;
+uniform float Bloom;
 uniform float Haze;
 uniform float Strength;
 uniform float Shoulder;
@@ -21,6 +23,7 @@ void main() {
     vec3 colour = pow(texture(DiffuseSampler, texCoord).rgb, vec3(2.2));
     vec2 light = texture(LightSampler, texCoord).rg;
     colour = colour * light.r + HALATION * (light.g * Haze);
+    colour += texture(BloomSampler, texCoord).rgb * HALATION * Bloom * Strength;
     colour = mix(colour, shoulder(colour), Strength);
     fragColor = vec4(pow(max(colour, 0.0), vec3(1.0 / 2.2)), 1.0);
 }

@@ -33,6 +33,7 @@ object LightField {
     private const val SHAFT_FADE = 0.6f
     private const val VERIFY_INTERVAL = 10
     private const val BUDGET_NANOS = 4_000_000L
+    private const val TICK_NANOS = 50_000_000L
 
     private val FADE = FloatArray(PROBE_Y - MIN_Y + 1) { Math.pow(SHAFT_FADE.toDouble(), it.toDouble()).toFloat() }
 
@@ -49,6 +50,7 @@ object LightField {
     private val sources = HashMap<Long, Float>()
     private val boosts = HashMap<Long, Float>()
     private var ticks = 0
+    private var tickedAt = 0L
 
     fun init() {
         ImmPtlClientChunkMap.clientChunkLoadSignal.connect { if (it.level.dimension() == SubstratumLevels.LEVEL_0) arrivals.add(it) }
@@ -56,6 +58,15 @@ object LightField {
     }
 
     fun tick(minecraft: Minecraft) {
+        tickedAt = System.nanoTime()
+        update(minecraft, BUDGET_NANOS)
+    }
+
+    fun stalled(): Boolean = System.nanoTime() - tickedAt > TICK_NANOS
+
+    fun refresh(minecraft: Minecraft) = update(minecraft, Long.MAX_VALUE)
+
+    private fun update(minecraft: Minecraft, budget: Long) {
         val current = levelZero(minecraft)
         if (current !== level) {
             geometry.clear()
@@ -78,7 +89,7 @@ object LightField {
         findStale(current)
         if (ticks % VERIFY_INTERVAL == 0) verify(current)
         val player = minecraft.player?.takeIf { it.level() === current }
-        drain(current, player?.chunkPosition(), minOf(minecraft.options.effectiveRenderDistance, SubstratumLevels.SIGHT_CHUNKS))
+        drain(current, player?.chunkPosition(), minOf(minecraft.options.effectiveRenderDistance, SubstratumLevels.SIGHT_CHUNKS), budget)
     }
 
     private fun levelZero(minecraft: Minecraft): ClientLevel? {
@@ -186,7 +197,7 @@ object LightField {
         for (dx in -2..2) for (dz in -2..2) due.add(ChunkPos.asLong(cx + dx, cz + dz))
     }
 
-    private fun drain(level: ClientLevel, centre: ChunkPos?, radius: Int) {
+    private fun drain(level: ClientLevel, centre: ChunkPos?, radius: Int, budget: Long) {
         if (due.isEmpty()) return
         val start = System.nanoTime()
         val ready = ArrayList<Long>()
@@ -198,7 +209,7 @@ object LightField {
         for (key in ready) {
             due.remove(key)
             finish(level, ChunkPos.getX(key), ChunkPos.getZ(key))
-            if (System.nanoTime() - start > BUDGET_NANOS) return
+            if (System.nanoTime() - start > budget) return
         }
     }
 

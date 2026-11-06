@@ -14,6 +14,7 @@ dependencies {
 
 def checks = [
         mazeCheck    : "worldgen.MazeLayoutCheckKt",
+        trailerCheck : "command.TrailerSetCheckKt",
         slitCheck    : "rift.SlitGeometryCheckKt",
         lampCheck    : "client.LampFlickerCheckKt",
         burstCheck   : "level.LampBurstsCheckKt",
@@ -21,6 +22,8 @@ def checks = [
         smilerCheck  : "smiler.SmilerCheckKt",
         gazeCheck    : "gaze.GazeCheckKt",
         directorCheck: "reality.DirectorCheckKt",
+        replayCheck  : "network.ReplayPositionCheckKt",
+        presenceCheck: "client.PresenceCheckKt",
 ]
 
 checks.each { name, main ->

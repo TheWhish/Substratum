@@ -44,7 +44,9 @@ object Atmosphere {
     private const val PORTAL_REACH = SubstratumLevels.SIGHT_CHUNKS * 16.0
     private const val NEAR_W = 0.05f
     private const val SCISSOR_MARGIN = 4
+    private const val NO_LAYER = -1
     private val SCATTER = floatArrayOf(0.88f, 0.72f, 0.56f, 0.43f)
+    private val CLEAR = floatArrayOf(0f, 0f, 0f, 0f)
 
     private class Pass(val effect: EffectInstance, val target: RenderTarget) {
         fun draw() {
@@ -59,6 +61,8 @@ object Atmosphere {
     private class Chain(
         val width: Int,
         val height: Int,
+        val depth: List<Pass>,
+        val stencil: List<Pass>,
         val world: List<Pass>,
         val lens: List<Pass>,
         val view: List<Pass>,
@@ -69,6 +73,7 @@ object Atmosphere {
         val light: Pass get() = world.first()
         val prefilter: Pass get() = lens.first()
         val composite: Pass get() = lens[lens.size - 2]
+        val bloom: List<Pass> = lens.subList(0, lens.size - 2)
         private val portals = GL20.glGetUniformLocation(light.effect.id, "Portals")
         private val portalCount = GL20.glGetUniformLocation(light.effect.id, "PortalCount")
 
@@ -86,6 +91,13 @@ object Atmosphere {
             GlStateManager._glUseProgram(0)
         }
 
+        fun markPortal(main: RenderTarget) {
+            GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, stencil.first().target.frameBufferId)
+            GlStateManager._glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_STENCIL_ATTACHMENT, GL11.GL_TEXTURE_2D, main.depthTextureId, 0)
+            GL30.glClearBufferfv(GL11.GL_COLOR, 0, CLEAR)
+            run(stencil)
+        }
+
         fun copy(from: RenderTarget) {
             GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, from.frameBufferId)
             GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, swap.frameBufferId)
@@ -93,7 +105,7 @@ object Atmosphere {
         }
 
         override fun close() {
-            (world + lens + view).forEach { it.effect.close() }
+            (depth + stencil + world + lens + view).forEach { it.effect.close() }
             targets.forEach(RenderTarget::destroyBuffers)
             GlStateManager._glDeleteVertexArrays(vao)
         }
@@ -101,12 +113,15 @@ object Atmosphere {
 
     private var chain: Chain? = null
     private var failed = false
-    private var presence = 0f
-    private var presenceO = 0f
+    private var shown: ClientLevel? = null
+    private var origin = 0f
+    private var since = 0L
     private var seconds = 0f
     private var lit = false
     private var hands = true
     private var composited = false
+    private var capturedLayer = NO_LAYER
+    private var sceneDepth = false
     private val viewProjection = Matrix4f()
     private val corner = Vector4f()
     private val portalData = MemoryUtil.memAllocFloat(PORTALS * 12)
@@ -122,29 +137,55 @@ object Atmosphere {
     }
 
     fun tick(minecraft: Minecraft) {
-        presenceO = presence
-        val inside = minecraft.level?.dimension() == SubstratumLevels.LEVEL_0
-        presence = if (inside) minOf(1f, presence + ENTER) else maxOf(0f, presence - LEAVE)
         val level = minecraft.level ?: return
         active(minecraft, ClientConfig.intensity)
-        if (inside) LightVolume.selectLamps(level, minecraft.gameRenderer.mainCamera.position)
+        if (level.dimension() == SubstratumLevels.LEVEL_0) LightVolume.selectLamps(level, minecraft.gameRenderer.mainCamera.position)
+    }
+
+    @JvmStatic
+    fun catchUp(minecraft: Minecraft) {
+        if (LightField.stalled()) settleLight(minecraft)
+    }
+
+    @JvmStatic
+    fun settleLight(minecraft: Minecraft) {
+        LightField.refresh(minecraft)
+        val level = minecraft.level?.takeIf { it.dimension() == SubstratumLevels.LEVEL_0 } ?: return
+        LightVolume.selectLamps(level, minecraft.gameRenderer.mainCamera.position)
     }
 
     @JvmStatic
     fun settle(minecraft: Minecraft) {
-        presence = if (minecraft.level?.dimension() == SubstratumLevels.LEVEL_0) 1f else 0f
-        presenceO = presence
+        val level = minecraft.level ?: return
+        shown = level
+        origin = target(level)
+        since = level.gameTime
+    }
+
+    fun forget() {
+        shown = null
+    }
+
+    @JvmStatic
+    fun captureSceneDepth(minecraft: Minecraft) {
+        if (minecraft.level?.dimension() != SubstratumLevels.LEVEL_0) return
+        val current = active(minecraft, ClientConfig.intensity) ?: return
+        current.run(current.depth)
+        minecraft.mainRenderTarget.bindWrite(false)
+        capturedLayer = PortalRendering.getPortalLayer()
     }
 
     @JvmStatic
     fun renderWorld(minecraft: Minecraft, partialTick: Float, camera: Camera, view: Matrix4f, projection: Matrix4f, clearsHands: Boolean) {
+        sceneDepth = capturedLayer == PortalRendering.getPortalLayer()
+        if (sceneDepth) capturedLayer = NO_LAYER
         val level = minecraft.level ?: return
         if (level.dimension() != SubstratumLevels.LEVEL_0) return
         if (PortalRendering.isRendering()) {
             renderPortalView(minecraft, level, camera, view, projection)
             return
         }
-        val strength = strength(partialTick)
+        val strength = strength(level, partialTick)
         val current = active(minecraft, strength) ?: return
         light(current, level, camera, view, projection, strength)
         minecraft.mainRenderTarget.bindWrite(true)
@@ -163,17 +204,35 @@ object Atmosphere {
         LightVolume.selectLamps(level, camera.position)
         scissor(bounds, current.light.target, main)
         light(current, level, camera, view, projection, strength)
+        if (bounds != null) RenderSystem.disableScissor()
+        portalBloom(current, main, strength)
         scissor(bounds, main, main)
         current.copy(main)
         current.view.first().effect.apply {
             safeGetUniform("Haze").set(HAZE * strength)
             safeGetUniform("Strength").set(strength)
+            safeGetUniform("Bloom").set(BLOOM)
         }
         prepare()
         current.run(current.view)
         if (bounds != null) RenderSystem.disableScissor()
         main.bindWrite(true)
         RenderSystem.enableDepthTest()
+    }
+
+    private fun portalBloom(current: Chain, main: RenderTarget, strength: Float) {
+        prepare()
+        current.markPortal(main)
+        current.prefilter.effect.apply {
+            safeGetUniform("Lit").set(1f)
+            safeGetUniform("Haze").set(HAZE * strength)
+            safeGetUniform("Emission").set(EMISSION * strength)
+            safeGetUniform("Hands").set(0f)
+            safeGetUniform("Masked").set(1f)
+        }
+        main.setFilterMode(GL11.GL_LINEAR)
+        current.run(current.bloom)
+        main.setFilterMode(GL11.GL_NEAREST)
     }
 
     private fun portalBounds(camera: Camera, view: Matrix4f, projection: Matrix4f, main: RenderTarget): IntArray? {
@@ -253,7 +312,7 @@ object Atmosphere {
     @JvmStatic
     fun render(minecraft: Minecraft, frameTicks: Float, partialTick: Float) {
         seconds = (seconds + frameTicks / 20f) % SECONDS_WRAP
-        val strength = strength(partialTick)
+        val strength = strength(minecraft.level ?: return, partialTick)
         val current = active(minecraft, strength) ?: return
         val glare = 1f + SanityEffects.glare(partialTick) * ClientConfig.intensity
         val lighting = if (lit) 1f else 0f
@@ -263,6 +322,7 @@ object Atmosphere {
             safeGetUniform("Haze").set(HAZE * strength * glare)
             safeGetUniform("Emission").set(EMISSION * strength)
             safeGetUniform("Hands").set(if (hands) 1f else 0f)
+            safeGetUniform("Masked").set(0f)
         }
         current.composite.effect.apply {
             safeGetUniform("Lit").set(lighting)
@@ -296,9 +356,27 @@ object Atmosphere {
         chain = null
         failed = false
         lit = false
+        capturedLayer = NO_LAYER
     }
 
-    private fun strength(partialTick: Float): Float = ClientConfig.intensity * (presenceO + (presence - presenceO) * partialTick)
+    private fun strength(level: ClientLevel, partialTick: Float): Float {
+        if (level !== shown) {
+            origin = shown?.let { presence(it, 0f) } ?: target(level)
+            shown = level
+            since = level.gameTime
+        }
+        return ClientConfig.intensity * presence(level, partialTick)
+    }
+
+    private fun target(level: ClientLevel): Float = if (level.dimension() == SubstratumLevels.LEVEL_0) 1f else 0f
+
+    private fun presence(level: ClientLevel, partialTick: Float): Float =
+        approach(origin, target(level), (level.gameTime - since) + partialTick)
+
+    internal fun approach(from: Float, to: Float, ticks: Float): Float {
+        val elapsed = maxOf(0f, ticks)
+        return if (to >= from) minOf(to, from + elapsed * ENTER) else maxOf(to, from - elapsed * LEAVE)
+    }
 
     private fun active(minecraft: Minecraft, strength: Float): Chain? {
         if (failed || strength <= 0f || minecraft.level == null || irisInUse?.invoke() == true) return null
@@ -349,12 +427,16 @@ object Atmosphere {
             val up = List(LEVELS - 1) { keep(hdr(down[it].width, down[it].height, GL30.GL_R11F_G11F_B10F)) }
             val light = keep(hdr(down[0].width, down[0].height, GL30.GL_RGBA16F))
             val swap = keep(TextureTarget(main.width, main.height, false, Minecraft.ON_OSX)).apply { setFilterMode(GL11.GL_LINEAR) }
+            val scene = keep(hdr(main.width, main.height, GL30.GL_R32F))
             val depth = "DepthSampler" to IntSupplier(main::getDepthTextureId)
             val lighting = "LightSampler" to IntSupplier(light::getColorTextureId)
-            val world = pass("substratum_light", main, light, depth)
+            val mask = keep(hdr(main.width, main.height, GL30.GL_R8))
+            val copy = pass("substratum_depth", main, scene, depth)
+            val outline = pass("substratum_mask", main, mask)
+            val world = pass("substratum_light", main, light, "DepthSampler" to IntSupplier { if (sceneDepth) scene.colorTextureId else main.depthTextureId })
             LightVolume.attach(world.effect.id)
             val lens = ArrayList<Pass>()
-            lens += pass("substratum_bloom_prefilter", main, down[0], lighting, depth)
+            lens += pass("substratum_bloom_prefilter", main, down[0], lighting, depth, "MaskSampler" to IntSupplier(mask::getColorTextureId))
             for (i in 1 until LEVELS) lens += pass("substratum_bloom_down", down[i - 1], down[i])
             for (i in LEVELS - 2 downTo 0) {
                 lens += pass("substratum_bloom_up", if (i == LEVELS - 2) down[i + 1] else up[i + 1], up[i], "BaseSampler" to IntSupplier(down[i]::getColorTextureId))
@@ -362,9 +444,9 @@ object Atmosphere {
             }
             lens += pass("substratum_atmosphere", main, swap, "BloomSampler" to IntSupplier(up[0]::getColorTextureId), lighting, depth)
             lens += pass("substratum_fxaa", swap, main)
-            val view = pass("substratum_portal", swap, main, lighting)
+            val view = pass("substratum_portal", swap, main, lighting, "BloomSampler" to IntSupplier(up[0]::getColorTextureId))
             vao = GlStateManager._glGenVertexArrays()
-            return Chain(main.width, main.height, listOf(world), lens, listOf(view), swap, targets, vao)
+            return Chain(main.width, main.height, listOf(copy), listOf(outline), listOf(world), lens, listOf(view), swap, targets, vao)
         } catch (e: Exception) {
             effects.forEach(EffectInstance::close)
             targets.forEach(RenderTarget::destroyBuffers)

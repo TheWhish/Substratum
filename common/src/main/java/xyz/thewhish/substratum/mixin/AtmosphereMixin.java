@@ -46,6 +46,11 @@ abstract class AtmosphereMixin {
         Atmosphere.renderWorld(this.minecraft, deltaTracker.getGameTimeDeltaPartialTick(false), camera, view, projection, this.renderHand);
     }
 
+    @Inject(method = "render", at = @At("HEAD"))
+    private void substratum$catchUp(DeltaTracker deltaTracker, boolean renderLevel, CallbackInfo ci) {
+        if (renderLevel) Atmosphere.catchUp(this.minecraft);
+    }
+
     @Inject(
         method = "render",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/LevelRenderer;doEntityOutline()V", shift = At.Shift.AFTER)

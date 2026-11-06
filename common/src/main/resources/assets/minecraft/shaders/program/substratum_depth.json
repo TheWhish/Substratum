@@ -1,0 +1,7 @@
+{
+    "blend": { "func": "add", "srcrgb": "one", "dstrgb": "zero" },
+    "vertex": "substratum_screen",
+    "fragment": "substratum_depth",
+    "samplers": [ { "name": "DepthSampler" } ],
+    "uniforms": []
+}

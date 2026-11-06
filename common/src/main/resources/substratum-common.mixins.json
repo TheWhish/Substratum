@@ -1,4 +1,4 @@
-{
+﻿{
   "required": true,
   "minVersion": "0.8.5",
   "package": "xyz.thewhish.substratum.mixin",
@@ -14,9 +14,12 @@
   "client": [
     "AtmosphereMixin",
     "BackroomsLightMixin",
+    "ClientLightOrderMixin",
     "EntityLightMixin",
     "FogMixin",
     "FovMixin",
+    "ReplayPositionMixin",
+    "SceneDepthMixin",
     "SkyBlackoutMixin"
   ],
   "injectors": { "defaultRequire": 1 }

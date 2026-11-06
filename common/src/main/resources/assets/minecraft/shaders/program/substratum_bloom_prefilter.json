@@ -2,7 +2,7 @@
     "blend": { "func": "add", "srcrgb": "one", "dstrgb": "zero" },
     "vertex": "substratum_screen",
     "fragment": "substratum_bloom_prefilter",
-    "samplers": [ { "name": "DiffuseSampler" }, { "name": "LightSampler" }, { "name": "DepthSampler" } ],
+    "samplers": [ { "name": "DiffuseSampler" }, { "name": "LightSampler" }, { "name": "DepthSampler" }, { "name": "MaskSampler" } ],
     "uniforms": [
         { "name": "InSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
         { "name": "Threshold", "type": "float", "count": 1, "values": [ 0.45 ] },
@@ -10,6 +10,7 @@
         { "name": "Lit", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "Hands", "type": "float", "count": 1, "values": [ 1.0 ] },
         { "name": "Haze", "type": "float", "count": 1, "values": [ 0.0 ] },
-        { "name": "Emission", "type": "float", "count": 1, "values": [ 0.0 ] }
+        { "name": "Emission", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Masked", "type": "float", "count": 1, "values": [ 0.0 ] }
     ]
 }

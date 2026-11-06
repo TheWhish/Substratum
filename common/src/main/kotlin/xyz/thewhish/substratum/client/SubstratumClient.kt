@@ -65,6 +65,7 @@ object SubstratumClient {
             SanityClient.reset()
             Vhs.reset()
             ProbeView.reset()
+            Atmosphere.forget()
         }
     }
 

@@ -30,6 +30,7 @@ object DebugCommand {
             )
             .then(Commands.literal("glitch").executes(::glitch))
             .then(Commands.literal("burst").executes(::burst))
+            .then(Commands.literal("trailer").executes(::trailer))
     }
 
     private fun visit(context: CommandContext<CommandSourceStack>, approach: Spots.Approach?): Int {
@@ -68,6 +69,13 @@ object DebugCommand {
         val pos = LampBursts.burstNear(context.source.playerOrException)
             ?: return fail(context, "No lamp to burst: in Level 0 it needs a burning lamp within 24 blocks that you can see")
         return done(context, "A lamp bursts at ${pos.x} ${pos.y} ${pos.z}")
+    }
+
+    private fun trailer(context: CommandContext<CommandSourceStack>): Int {
+        val lines = TrailerSet.build(context.source.playerOrException)
+            ?: return fail(context, "No straight lit corridor found: run it in Level 0 away from dark zones")
+        for (line in lines) context.source.sendSuccess({ line }, false)
+        return 1
     }
 
     private fun done(context: CommandContext<CommandSourceStack>, message: String): Int {
