@@ -3,10 +3,12 @@ import "../assets/fonts/IBMPlexMono-Medium.ttf";
 import "../assets/fonts/VT323-Regular.ttf";
 import { Theme } from "theme.slint";
 import { Logo, VhsLayer } from "vhs.slint";
-import { MenuItem, Osd, RecDot, WindowAction, WindowButton } from "widgets.slint";
+import { Marker, MenuItem, Osd, RecDot, WindowAction, WindowButton } from "widgets.slint";
 import { PlayPanel, ProfilePanel, SettingsPanel } from "pages.slint";
 
 enum Panel { play, profile, settings }
+
+export enum Outcome { done, cancelled, network, disk, corrupt, failed }
 
 export component AppWindow inherits Window {
     in property <string> version;
@@ -23,15 +25,25 @@ export component AppWindow inherits Window {
     in property <[string]> join-cells;
     in-out property <string> join-text;
     in-out property <string> nick;
+    in property <string> build;
+    in property <bool> busy;
+    in property <bool> preparing;
+    in property <float> progress;
+    in property <float> speed;
+    in property <bool> downloading;
     callback quit();
+    callback install();
+    callback cancel();
     callback drag-window(length, length);
     callback join-edited(string);
 
     property <Panel> panel: Panel.play;
     property <Panel> target: Panel.play;
     property <bool> rewinding;
+    property <bool> sweeping;
     property <bool> powered;
     property <string> message;
+    property <bool> alarm;
 
     title: "Substratum";
     no-frame: true;
@@ -45,6 +57,15 @@ export component AppWindow inherits Window {
     init => {
         root.powered = true;
     }
+
+    states [
+        sweeping when root.sweeping: {
+            sweep.y: panel-area.height;
+            in {
+                animate sweep.y { duration: Theme.sweep; easing: ease-in; }
+            }
+        }
+    ]
 
     function pad(value: int) -> string {
         return value < 10 ? "0" + value : "" + value;
@@ -68,18 +89,64 @@ export component AppWindow inherits Window {
         }
         root.target = next;
         root.rewinding = true;
+        root.sweeping = true;
         panel-switch.running = true;
         panel-switch.restart();
+        sweep-timer.running = true;
+        sweep-timer.restart();
     }
 
-    function say(text: string) {
+    function say(text: string, alarm: bool) {
         root.message = text;
+        root.alarm = alarm;
         message-timer.running = true;
         message-timer.restart();
     }
 
     function launch() {
-        root.say(@tr("СБОРКА ЕЩЁ НЕ УСТАНОВЛЕНА"));
+        if root.busy {
+            return;
+        }
+        if root.build == "" {
+            root.install();
+            return;
+        }
+        root.say(@tr("ЗАПУСК ИГРЫ ПОКА НЕДОСТУПЕН"), false);
+    }
+
+    function repair() {
+        if !root.busy {
+            root.install();
+        }
+    }
+
+    public function finished(outcome: Outcome) {
+        if outcome == Outcome.done {
+            root.say(@tr("СБОРКА УСТАНОВЛЕНА"), false);
+        } else if outcome == Outcome.cancelled {
+            root.say(@tr("ЗАГРУЗКА ОТМЕНЕНА"), false);
+        } else if outcome == Outcome.network {
+            root.say(@tr("НЕТ СВЯЗИ С СЕРВЕРОМ, ПОПРОБУЙТЕ ПОЗЖЕ"), true);
+        } else if outcome == Outcome.disk {
+            root.say(@tr("НЕ УДАЛОСЬ ЗАПИСАТЬ ФАЙЛЫ, ПРОВЕРЬТЕ МЕСТО НА ДИСКЕ"), true);
+        } else if outcome == Outcome.corrupt {
+            root.say(@tr("ФАЙЛ ПРИШЁЛ ПОВРЕЖДЁННЫМ, ПОВТОРИТЕ ЗАГРУЗКУ"), true);
+        } else {
+            root.say(@tr("НЕ УДАЛОСЬ УСТАНОВИТЬ СБОРКУ"), true);
+        }
+    }
+
+    function status() -> string {
+        if root.busy && root.preparing {
+            return @tr("ПОДГОТОВКА");
+        }
+        if root.busy && !root.downloading {
+            return @tr("ПРОВЕРКА {}%", Math.floor(root.progress * 100));
+        }
+        if root.busy {
+            return @tr("ЗАГРУЗКА {}%", Math.floor(root.progress * 100));
+        }
+        return root.build == "" ? @tr("СБОРКА НЕ УСТАНОВЛЕНА") : @tr("СБОРКА {}", root.build.to-uppercase());
     }
 
     panel-switch := Timer {
@@ -92,8 +159,17 @@ export component AppWindow inherits Window {
         }
     }
 
+    sweep-timer := Timer {
+        interval: Theme.sweep;
+        running: false;
+        triggered => {
+            root.sweeping = false;
+            self.running = false;
+        }
+    }
+
     message-timer := Timer {
-        interval: Theme.message;
+        interval: root.alarm ? Theme.alarm : Theme.message;
         running: false;
         triggered => {
             root.message = "";
@@ -111,8 +187,12 @@ export component AppWindow inherits Window {
                 root.show(root.panel-at(Math.mod(root.index-of(root.target) + 1, 3)));
                 return accept;
             }
-            if event.text == Key.Escape {
+            if event.text == Key.Escape && root.target != Panel.play {
                 root.show(Panel.play);
+                return accept;
+            }
+            if event.text == Key.Escape && root.busy {
+                root.cancel();
                 return accept;
             }
             if event.text == Key.Return && root.panel == Panel.play {
@@ -128,7 +208,7 @@ export component AppWindow inherits Window {
             animate transform-scale-y, opacity { duration: Theme.power-on; easing: ease-out; }
 
             Rectangle {
-                height: Theme.edge + Theme.osd-line + Theme.gap / 2;
+                height: Theme.frame * 2 + 8px;
                 y: 0px;
 
                 TouchArea {
@@ -153,15 +233,22 @@ export component AppWindow inherits Window {
                         spacing: 10px;
                         alignment: start;
 
-                        VerticalLayout {
+                        if !root.busy: VerticalLayout {
                             alignment: center;
                             RecDot { opacity: root.blink ? 1 : 0; }
                         }
-                        Osd { text: "REC"; color: Theme.text; }
-                        Osd { text: "SP  " + root.timecode(); }
+                        if !root.busy: Osd { text: "REC"; color: Theme.text; }
+                        if root.busy: HorizontalLayout {
+                            spacing: 1px;
+                            alignment: center;
+                            VerticalLayout { alignment: center; Marker { } }
+                            VerticalLayout { alignment: center; Marker { } }
+                        }
+                        if root.busy: Osd { text: @tr("ПЕРЕМОТКА"); color: Theme.text; }
+                        Osd { text: root.timecode(); }
                     }
 
-                    Rectangle { height: Theme.osd-gap - 3px; }
+                    Rectangle { height: Theme.osd-gap - 4px; }
 
                     Logo { glitch: root.logo-glitch; }
 
@@ -181,7 +268,7 @@ export component AppWindow inherits Window {
                                 alignment: start;
 
                                 MenuItem {
-                                    label: @tr("ИГРАТЬ");
+                                    label: root.busy ? @tr("ЗАГРУЗКА") : @tr("ИГРАТЬ");
                                     active: root.target == Panel.play;
                                     activated => { root.show(Panel.play); }
                                 }
@@ -206,7 +293,7 @@ export component AppWindow inherits Window {
                         Rectangle { width: 1px; background: Theme.line; }
                         Rectangle { width: Theme.gap - 1px; }
 
-                        Rectangle {
+                        panel-area := Rectangle {
                             horizontal-stretch: 1;
 
                             Rectangle {
@@ -226,19 +313,29 @@ export component AppWindow inherits Window {
                                     join-cells: root.join-cells;
                                     join-text <=> root.join-text;
                                     blink: root.blink;
+                                    busy: root.busy;
+                                    installed: root.build != "";
                                     join-edited(text) => { root.join-edited(text); }
-                                    join => { root.say(@tr("СВЯЗЬ С КОМАНДОЙ ПОКА НЕДОСТУПНА")); }
+                                    join => { root.say(@tr("СВЯЗЬ С КОМАНДОЙ ПОКА НЕДОСТУПНА"), false); }
                                     launch => { root.launch(); }
+                                    cancel => { root.cancel(); }
                                 }
                                 if root.panel == Panel.profile: ProfilePanel {
                                     nick <=> root.nick;
                                 }
                                 if root.panel == Panel.settings: SettingsPanel {
                                     version: root.version;
-                                    repair => { root.say(@tr("СБОРКА ЕЩЁ НЕ УСТАНОВЛЕНА")); }
-                                    open-logs => { root.say(@tr("ЛОГОВ ПОКА НЕТ")); }
-                                    open-screenshots => { root.say(@tr("СКРИНШОТОВ ПОКА НЕТ")); }
+                                    repair => { root.repair(); }
+                                    open-logs => { root.say(@tr("ЛОГОВ ПОКА НЕТ"), false); }
+                                    open-screenshots => { root.say(@tr("СКРИНШОТОВ ПОКА НЕТ"), false); }
                                 }
+                            }
+
+                            sweep := Rectangle {
+                                y: -self.height;
+                                height: 2px;
+                                background: #ffffff26;
+                                opacity: root.sweeping ? 1 : 0;
                             }
                         }
                     }
@@ -247,12 +344,40 @@ export component AppWindow inherits Window {
 
                     HorizontalLayout {
                         height: Theme.osd-line;
+                        spacing: Theme.gap;
 
-                        Osd {
-                            text: root.message != "" ? root.message : @tr("СБОРКА НЕ УСТАНОВЛЕНА");
-                            color: root.message != "" ? Theme.text : Theme.text-mute;
+                        HorizontalLayout {
+                            min-width: Theme.menu-width + Theme.gap;
+                            horizontal-stretch: 0;
+
+                            Osd {
+                                text: root.message != "" ? root.message : root.status();
+                                color: root.message == "" ? Theme.text-mute : root.alarm ? Theme.rec : Theme.text;
+                                horizontal-stretch: 1;
+                                animate color { duration: Theme.hover; easing: ease-out; }
+                            }
+                            if root.busy && root.downloading && root.message == "": Osd {
+                                text: @tr("{}.{} МБ/С", Math.floor(Math.round(root.speed * 10) / 10), Math.mod(Math.round(root.speed * 10), 10));
+                                horizontal-alignment: right;
+                            }
+                        }
+                        Rectangle {
                             horizontal-stretch: 1;
-                            animate color { duration: Theme.hover; easing: ease-out; }
+
+                            Rectangle {
+                                y: (parent.height - self.height) / 2;
+                                height: 2px;
+                                background: Theme.line;
+                                opacity: root.busy ? 1 : 0;
+                                animate opacity { duration: Theme.page-in; easing: ease-out; }
+
+                                Rectangle {
+                                    x: 0px;
+                                    width: parent.width * clamp(root.progress, 0, 1);
+                                    background: Theme.text;
+                                    animate width { duration: Theme.fill; easing: ease-out; }
+                                }
+                            }
                         }
                         Rectangle {
                             width: date.preferred-width;
@@ -264,7 +389,7 @@ export component AppWindow inherits Window {
             }
 
             WindowButton {
-                x: root.width - Theme.edge - 21px - 31px;
+                x: root.width - Theme.edge - 21px - 31px - 8px;
                 y: Theme.frame - 11px;
                 action: WindowAction.minimize;
                 clicked => { root.minimized = true; }

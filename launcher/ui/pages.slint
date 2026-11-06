@@ -8,9 +8,12 @@ export component PlayPanel inherits VerticalLayout {
     in property <[string]> join-cells;
     in-out property <string> join-text;
     in property <bool> blink;
+    in property <bool> busy;
+    in property <bool> installed;
     callback join-edited(string);
     callback join();
     callback launch();
+    callback cancel();
 
     property <length> card-width: (root.width - 3 * Theme.inner-gap) / 4;
     property <length> code-width: 8 * 32px + 7 * 4px + 16px + 4px;
@@ -155,13 +158,19 @@ export component PlayPanel inherits VerticalLayout {
     Rectangle { height: Theme.gap; }
 
     LaunchButton {
-        label: @tr("ЗАПУСК");
-        hint: "ENTER";
-        clicked => { root.launch(); }
+        label: root.busy ? @tr("ОТМЕНИТЬ") : root.installed ? @tr("ЗАПУСК") : @tr("УСТАНОВИТЬ");
+        hint: root.busy ? "ESC" : "ENTER";
+        clicked => {
+            if root.busy {
+                root.cancel();
+            } else {
+                root.launch();
+            }
+        }
     }
 }
 
-component SuitTile inherits Rectangle {
+component SkinTile inherits Rectangle {
     in property <color> top;
     in property <color> bottom;
     in property <bool> selected;
@@ -171,9 +180,6 @@ component SuitTile inherits Rectangle {
     width: 56px;
     height: 56px;
     background: root.top;
-    border-width: 1px;
-    border-color: root.selected || area.has-hover ? Theme.text : Theme.line;
-    animate border-color { duration: Theme.hover; easing: ease-out; }
 
     Rectangle {
         y: parent.height - self.height;
@@ -181,6 +187,12 @@ component SuitTile inherits Rectangle {
         background: root.bottom;
     }
     if root.label != "": Osd { text: root.label; }
+
+    Rectangle {
+        border-width: 1px;
+        border-color: root.selected || area.has-hover ? Theme.text : Theme.line;
+        animate border-color { duration: Theme.hover; easing: ease-out; }
+    }
 
     area := TouchArea {
         mouse-cursor: pointer;
@@ -191,7 +203,9 @@ component SuitTile inherits Rectangle {
 export component ProfilePanel inherits HorizontalLayout {
     in-out property <string> nick;
 
-    property <int> suit;
+    property <int> skin;
+    property <[color]> tops: [#c9b25a, #5f6b4a, #7a3b2e, #3a3a38];
+    property <[color]> bottoms: [#8a7a3a, #3c4430, #4a241c, #222220];
 
     spacing: Theme.gap;
 
@@ -235,17 +249,19 @@ export component ProfilePanel inherits HorizontalLayout {
         Rectangle { height: 20px; }
         Setting { label: @tr("МОДЕЛЬ РУК"); value: @tr("КЛАССИЧЕСКАЯ"); selector: true; }
         Rectangle { height: 20px; }
-        Osd { text: @tr("СКАФАНДР"); }
+        Osd { text: @tr("СКИН"); }
         Rectangle { height: 8px; }
         HorizontalLayout {
             spacing: 12px;
             alignment: start;
 
-            SuitTile { top: #c9b25a; bottom: #8a7a3a; selected: root.suit == 0; clicked => { root.suit = 0; } }
-            SuitTile { top: #5f6b4a; bottom: #3c4430; selected: root.suit == 1; clicked => { root.suit = 1; } }
-            SuitTile { top: #7a3b2e; bottom: #4a241c; selected: root.suit == 2; clicked => { root.suit = 2; } }
-            SuitTile { top: #3a3a38; bottom: #222220; selected: root.suit == 3; clicked => { root.suit = 3; } }
-            SuitTile { top: transparent; bottom: transparent; label: "PNG"; selected: root.suit == 4; clicked => { root.suit = 4; } }
+            for top[index] in root.tops: SkinTile {
+                top: top;
+                bottom: root.bottoms[index];
+                selected: root.skin == index;
+                clicked => { root.skin = index; }
+            }
+            SkinTile { top: transparent; bottom: transparent; label: "PNG"; selected: root.skin == root.tops.length; clicked => { root.skin = root.tops.length; } }
         }
         Rectangle { vertical-stretch: 1; }
     }
@@ -255,19 +271,26 @@ export component ProfilePanel inherits HorizontalLayout {
         border-width: 1px;
         border-color: Theme.line;
 
-        Rectangle {
+        property <color> top: root.tops[root.skin];
+        property <color> bottom: root.bottoms[root.skin];
+
+        if root.skin < root.tops.length: Rectangle {
             width: 112px;
             height: 224px;
             y: (parent.height - Theme.osd-line - 12px - self.height) / 2;
 
-            Rectangle { x: 28px; y: 0px; width: 56px; height: 56px; background: #c9b25a; }
-            Rectangle { x: 28px; y: 56px; width: 56px; height: 84px; background: #b29d4e; }
-            Rectangle { x: 0px; y: 56px; width: 28px; height: 84px; background: #a08c45; }
-            Rectangle { x: 84px; y: 56px; width: 28px; height: 84px; background: #a08c45; }
-            Rectangle { x: 28px; y: 140px; width: 28px; height: 84px; background: #8a7a3a; }
-            Rectangle { x: 56px; y: 140px; width: 28px; height: 84px; background: #7d6f35; }
+            Rectangle { x: 28px; y: 0px; width: 56px; height: 56px; background: top; }
+            Rectangle { x: 28px; y: 56px; width: 56px; height: 84px; background: top.darker(12%); }
+            Rectangle { x: 0px; y: 56px; width: 28px; height: 84px; background: top.darker(22%); }
+            Rectangle { x: 84px; y: 56px; width: 28px; height: 84px; background: top.darker(22%); }
+            Rectangle { x: 28px; y: 140px; width: 28px; height: 84px; background: bottom; }
+            Rectangle { x: 56px; y: 140px; width: 28px; height: 84px; background: bottom.darker(10%); }
         }
-
+        if root.skin == root.tops.length: Osd {
+            y: (parent.height - Theme.osd-line - 12px - self.height) / 2;
+            text: @tr("ФАЙЛ НЕ ВЫБРАН");
+            color: Theme.text-dim;
+        }
         HorizontalLayout {
             y: parent.height - 12px - self.height;
             height: Theme.osd-line;

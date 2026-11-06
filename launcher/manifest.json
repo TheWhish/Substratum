@@ -1,0 +1,37 @@
+{
+  "build": "0.1.0-alpha",
+  "minecraft": "1.21.1",
+  "fabric": "0.18.6",
+  "mods": [
+    {
+      "file": "substratum-0.1.0-alpha.jar",
+      "url": "https://github.com/TheWhish/Substratum/releases/download/build-0.1.0-alpha/substratum-0.1.0-alpha.jar",
+      "size": 4110724,
+      "sha256": "0df42c63f2ab752bce097ed1f8adc83a25fc3c76cd7be9ff8e166ceac1575408"
+    },
+    {
+      "file": "fabric-api-0.116.15+1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/P7dR8mSH/versions/Nlt8gI9z/fabric-api-0.116.15%2B1.21.1.jar",
+      "size": 2452718,
+      "sha256": "a61a10f730ab8aa45ff42486ee65699e6e51c28a0c168deb161e7d4029473aa3"
+    },
+    {
+      "file": "fabric-language-kotlin-1.13.12+kotlin.2.4.0.jar",
+      "url": "https://cdn.modrinth.com/data/Ha28R6CL/versions/Pd0xrHCw/fabric-language-kotlin-1.13.12%2Bkotlin.2.4.0.jar",
+      "size": 8076848,
+      "sha256": "36c5dd8b728e3470d2882ae63119b93a20500fc0ea6f5c945c12bf65b5ab1832"
+    },
+    {
+      "file": "architectury-13.0.11-fabric.jar",
+      "url": "https://cdn.modrinth.com/data/lhGA9TYQ/versions/Pzc2FP5K/architectury-13.0.11-fabric.jar",
+      "size": 600921,
+      "sha256": "ab17d5c7d8d8c93cc713437ed426f0ff0d6f802a48fff0c579a9bd3aaa833efd"
+    },
+    {
+      "file": "sodium-fabric-0.8.13+mc1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/AANobbMI/versions/SMxNOGZ6/sodium-fabric-0.8.13%2Bmc1.21.1.jar",
+      "size": 1574609,
+      "sha256": "3d43c14985a4deb19c654aad3393b454cf57e1ebcbba86c4ae6a98dfc60eca2d"
+    }
+  ]
+}
