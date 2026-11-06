@@ -24,7 +24,7 @@ ext.modMetadata = [
         fabric_kotlin_version   : fabric_kotlin_version,
 ]
 
-allprojects {
+subprojects {
     apply plugin: "java"
     apply plugin: "architectury-plugin"
 
