@@ -18,6 +18,7 @@
     "EntityLightMixin",
     "FogMixin",
     "FovMixin",
+    "LocalSkinMixin",
     "ReplayPositionMixin",
     "SceneDepthMixin",
     "SkyBlackoutMixin"

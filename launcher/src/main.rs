@@ -4,10 +4,12 @@ mod code;
 mod fetch;
 mod install;
 mod launch;
+mod profile;
+mod skin;
 mod vhs;
 
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -16,64 +18,64 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use fetch::{Error, Progress};
-use slint::{CloseRequestResponse, ComponentHandle, PhysicalPosition, Timer, TimerMode, Weak};
+use profile::Profile;
+use skin::{PRESETS, Skin};
+use slint::{
+    CloseRequestResponse, ComponentHandle, ModelRc, PhysicalPosition, Timer, TimerMode, VecModel,
+    Weak,
+};
 
 slint::include_modules!();
 
-fn main() -> Result<(), slint::PlatformError> {
+const SPEED_WINDOW: Duration = Duration::from_secs(1);
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let home: Rc<Path> = install::home().ok_or("APPDATA is not set")?.into();
+    let profile = Rc::new(RefCell::new(load_profile(&home)?));
+
     let app = AppWindow::new()?;
     app.set_version(env!("CARGO_PKG_VERSION").into());
     app.set_scanlines(vhs::scanlines());
     app.set_tracking_time(vhs::TRACKING.as_millis() as i64);
+    app.set_build(install::installed(&home).unwrap_or_default().into());
+    app.set_presets(presets());
+    app.set_nick(profile.borrow().nick.as_str().into());
+    show_skin(&app, &home, &profile.borrow());
 
     let team_code = code::generate(&mut vhs::Rng::seeded());
     app.set_team_code(team_code.as_str().into());
     app.set_team_cells(code::cells(&team_code));
     app.set_join_cells(code::cells(""));
 
-    let home = install::home();
-    app.set_build(
-        home.as_deref()
-            .and_then(install::installed)
-            .unwrap_or_default()
-            .into(),
-    );
+    bind_profile(&app, &home, &profile);
     let job: Rc<RefCell<Option<Job>>> = Rc::default();
 
     let weak = app.as_weak();
-    let root = home.clone();
-    let slot = job.clone();
+    let (root, slot) = (home.clone(), job.clone());
     app.on_install(move || {
         let Some(app) = weak.upgrade() else { return };
         if slot.borrow().is_some() {
             return;
         }
-        match root.clone() {
-            Some(home) => {
-                *slot.borrow_mut() = Some(Job::start(home));
-                app.set_preparing(true);
-                app.set_progress(0.0);
-                app.set_speed(0.0);
-                app.set_downloading(false);
-                app.set_busy(true);
-            }
-            None => app.invoke_finished(Outcome::Disk),
-        }
+        *slot.borrow_mut() = Some(Job::start(root.to_path_buf()));
+        app.set_preparing(true);
+        app.set_progress(0.0);
+        app.set_speed(0.0);
+        app.set_downloading(false);
+        app.set_busy(true);
     });
 
     let weak = app.as_weak();
-    let root = home.clone();
-    app.on_play(move |nick| {
+    let (root, player) = (home.clone(), profile.clone());
+    app.on_play(move || {
         let Some(app) = weak.upgrade() else {
             return Launch::Failed;
         };
-        if !launch::valid_nick(&nick) {
+        let profile = player.borrow();
+        if !profile::valid_nick(&profile.nick) {
             return Launch::Nick;
         }
-        let Some(home) = &root else {
-            return Launch::Failed;
-        };
-        match launch::start(home, &nick) {
+        match launch::start(&root, &profile) {
             Ok(game) => {
                 if let Err(error) = app.hide() {
                     eprintln!("failed to hide the launcher: {error}");
@@ -90,11 +92,10 @@ fn main() -> Result<(), slint::PlatformError> {
 
     let root = home.clone();
     app.on_open(move |place| {
-        let Some(home) = &root else { return false };
-        let logs = launch::instance(home).join("logs");
+        let logs = launch::instance(&root).join("logs");
         let path = match place {
             Place::Logs => logs,
-            Place::Screenshots => launch::instance(home).join("screenshots"),
+            Place::Screenshots => launch::instance(&root).join("screenshots"),
             Place::LatestLog => logs.join("latest.log"),
         };
         path.exists() && reveal(&path)
@@ -165,7 +166,120 @@ fn main() -> Result<(), slint::PlatformError> {
     });
 
     app.show()?;
-    slint::run_event_loop_until_quit()
+    slint::run_event_loop_until_quit()?;
+    Ok(())
+}
+
+fn load_profile(home: &Path) -> fetch::Result<Profile> {
+    Profile::load(home).or_else(|error| {
+        eprintln!("profile is unreadable, starting a new one: {error}");
+        Profile::reset(home)
+    })
+}
+
+fn bind_profile(app: &AppWindow, home: &Rc<Path>, profile: &Rc<RefCell<Profile>>) {
+    let weak = app.as_weak();
+    let (root, player) = (home.clone(), profile.clone());
+    app.on_nick_edited(move |text| {
+        let Some(app) = weak.upgrade() else { return };
+        let clean = profile::sanitize_nick(&text);
+        if clean != text.as_str() {
+            app.set_nick(clean.as_str().into());
+        }
+        let mut profile = player.borrow_mut();
+        profile.nick = clean;
+        persist(&root, &profile);
+    });
+
+    let weak = app.as_weak();
+    let (root, player) = (home.clone(), profile.clone());
+    app.on_select_skin(move |index| {
+        let Some(app) = weak.upgrade() else { return };
+        let mut profile = player.borrow_mut();
+        match usize::try_from(index) {
+            Ok(index) if index < PRESETS.len() => profile.choose_preset(index),
+            _ if profile.choose_custom(&root) => {}
+            _ => return,
+        }
+        persist(&root, &profile);
+        show_skin(&app, &root, &profile);
+    });
+
+    let weak = app.as_weak();
+    let (root, player) = (home.clone(), profile.clone());
+    app.on_pick_skin(move || {
+        let Some(app) = weak.upgrade() else {
+            return Pick::Cancelled;
+        };
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("PNG", &["png"])
+            .set_parent(&app.window().window_handle())
+            .pick_file()
+        else {
+            return Pick::Cancelled;
+        };
+        let skin = match Skin::read(&path) {
+            Ok(skin) => skin,
+            Err(error) => {
+                eprintln!("rejected skin: {error}");
+                return Pick::Rejected;
+            }
+        };
+        let mut profile = player.borrow_mut();
+        if let Err(error) = profile.adopt_custom(&root, &skin) {
+            eprintln!("failed to store the skin: {error}");
+            return Pick::Failed;
+        }
+        persist(&root, &profile);
+        show_skin(&app, &root, &profile);
+        Pick::Chosen
+    });
+}
+
+fn persist(home: &Path, profile: &Profile) {
+    if let Err(error) = profile.save(home) {
+        eprintln!("failed to save the profile: {error}");
+    }
+}
+
+fn show_skin(app: &AppWindow, home: &Path, profile: &Profile) {
+    let skin = profile.skin(home).or_else(|error| {
+        eprintln!("failed to read the skin, showing the default one: {error}");
+        Skin::preset(&PRESETS[0])
+    });
+    match skin {
+        Ok(skin) => {
+            app.set_front(skin.front());
+            app.set_back(skin.back());
+            app.set_face(skin.face());
+        }
+        Err(error) => eprintln!("built-in skin is broken: {error}"),
+    }
+    match Profile::custom_skin(home) {
+        Ok(custom) => {
+            app.set_custom_skin(custom.is_some());
+            app.set_custom_front(custom.map(|skin| skin.front()).unwrap_or_default());
+        }
+        Err(error) => {
+            eprintln!("failed to read the custom skin: {error}");
+            app.set_custom_skin(false);
+        }
+    }
+    app.set_skin(profile.preset().unwrap_or(PRESETS.len()) as i32);
+}
+
+fn presets() -> ModelRc<slint::Image> {
+    let figures: Vec<slint::Image> = PRESETS
+        .iter()
+        .filter_map(|preset| match Skin::preset(preset) {
+            Ok(skin) => Some(skin.front()),
+            Err(error) => {
+                eprintln!("built-in skin is broken: {error}");
+                None
+            }
+        })
+        .collect();
+    ModelRc::new(VecModel::from(figures))
 }
 
 fn quit() {
@@ -190,7 +304,7 @@ fn watch(mut game: Child, weak: Weak<AppWindow>) {
     });
 }
 
-fn reveal(path: &std::path::Path) -> bool {
+fn reveal(path: &Path) -> bool {
     match Command::new("explorer").arg(path).spawn() {
         Ok(_) => true,
         Err(error) => {
@@ -199,8 +313,6 @@ fn reveal(path: &std::path::Path) -> bool {
         }
     }
 }
-
-const SPEED_WINDOW: Duration = Duration::from_secs(1);
 
 struct Job {
     progress: Arc<Progress>,

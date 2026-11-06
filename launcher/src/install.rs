@@ -511,11 +511,15 @@ fn parse<T: DeserializeOwned>(bytes: &[u8], url: &str) -> Result<T> {
     serde_json::from_slice(bytes).map_err(|error| Error::Invalid(format!("{url}: {error}")))
 }
 
-fn save(path: &Path, bytes: &[u8]) -> Result<()> {
+pub fn save(path: &Path, bytes: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(io_error(parent))?;
     }
-    fs::write(path, bytes).map_err(io_error(path))
+    let mut staged = path.as_os_str().to_owned();
+    staged.push(".tmp");
+    let staged = PathBuf::from(staged);
+    fs::write(&staged, bytes).map_err(io_error(&staged))?;
+    fs::rename(&staged, path).map_err(io_error(path))
 }
 
 #[cfg(test)]

@@ -31,7 +31,7 @@ impl fmt::Display for Error {
             Error::Network { url, source } => write!(f, "request to {url} failed: {source}"),
             Error::Io { path, source } => write!(f, "{}: {source}", path.display()),
             Error::Corrupt { url } => write!(f, "{url} does not match its expected hash"),
-            Error::Invalid(reason) => write!(f, "invalid build metadata: {reason}"),
+            Error::Invalid(reason) => write!(f, "invalid data: {reason}"),
             Error::Cancelled => f.write_str("cancelled"),
         }
     }

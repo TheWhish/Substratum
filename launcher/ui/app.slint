@@ -14,6 +14,8 @@ export enum Launch { started, nick, failed }
 
 export enum Place { logs, screenshots, latest-log }
 
+export enum Pick { chosen, cancelled, rejected, failed }
+
 export component AppWindow inherits Window {
     in property <string> version;
     in property <image> noise;
@@ -29,6 +31,13 @@ export component AppWindow inherits Window {
     in property <[string]> join-cells;
     in-out property <string> join-text;
     in-out property <string> nick;
+    in property <image> face;
+    in property <image> front;
+    in property <image> back;
+    in property <[image]> presets;
+    in property <image> custom-front;
+    in property <int> skin;
+    in property <bool> custom-skin;
     in property <string> build;
     in property <bool> busy;
     in property <bool> preparing;
@@ -37,12 +46,15 @@ export component AppWindow inherits Window {
     in property <bool> downloading;
     in-out property <bool> crashed;
     callback quit();
-    callback play(string) -> Launch;
+    callback play() -> Launch;
     callback open(Place) -> bool;
     callback install();
     callback cancel();
     callback drag-window(length, length);
     callback join-edited(string);
+    callback nick-edited(string);
+    callback select-skin(int);
+    callback pick-skin() -> Pick;
 
     property <Panel> panel: Panel.play;
     property <Panel> target: Panel.play;
@@ -119,7 +131,7 @@ export component AppWindow inherits Window {
             root.install();
             return;
         }
-        let launch = root.play(root.nick == "" ? "PLAYER" : root.nick);
+        let launch = root.play();
         if launch == Launch.nick {
             root.say(@tr("НИК: 3–16 ЛАТИНСКИХ БУКВ, ЦИФР ИЛИ _"), true);
         } else if launch == Launch.failed {
@@ -131,6 +143,15 @@ export component AppWindow inherits Window {
         if !root.busy {
             root.crashed = false;
             root.install();
+        }
+    }
+
+    function pick() {
+        let pick = root.pick-skin();
+        if pick == Pick.rejected {
+            root.say(@tr("НУЖЕН PNG 64×64 ДО 256 КБ"), true);
+        } else if pick == Pick.failed {
+            root.say(@tr("НЕ УДАЛОСЬ СОХРАНИТЬ СКИН"), true);
         }
     }
 
@@ -331,6 +352,7 @@ export component AppWindow inherits Window {
 
                                 if root.panel == Panel.play: PlayPanel {
                                     nick: root.nick;
+                                    face: root.face;
                                     team-code: root.team-code;
                                     team-cells: root.team-cells;
                                     join-cells: root.join-cells;
@@ -345,6 +367,15 @@ export component AppWindow inherits Window {
                                 }
                                 if root.panel == Panel.profile: ProfilePanel {
                                     nick <=> root.nick;
+                                    presets: root.presets;
+                                    custom-front: root.custom-front;
+                                    skin: root.skin;
+                                    custom-skin: root.custom-skin;
+                                    front: root.front;
+                                    back: root.back;
+                                    nick-edited(text) => { root.nick-edited(text); }
+                                    select-skin(index) => { root.select-skin(index); }
+                                    pick-skin => { root.pick(); }
                                 }
                                 if root.panel == Panel.settings: SettingsPanel {
                                     version: root.version;
