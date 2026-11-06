@@ -22,8 +22,6 @@ ext.modMetadata = [
         architectury_version    : architectury_version,
         fabric_loader_version   : fabric_loader_version,
         fabric_kotlin_version   : fabric_kotlin_version,
-        neoforge_version        : neoforge_version,
-        kotlin_for_forge_version: kotlin_for_forge_version,
 ]
 
 allprojects {
@@ -35,12 +33,6 @@ allprojects {
 
     repositories {
         maven { url = "https://maven.architectury.dev/" }
-        maven { url = "https://maven.neoforged.net/releases/" }
-        maven {
-            name = "Kotlin for Forge"
-            url = "https://thedarkcolour.github.io/KotlinForForge/"
-            content { includeGroup "thedarkcolour" }
-        }
         ivy {
             name = "Vendored"
             url = rootProject.file("libs")

@@ -1,0 +1,86 @@
+component PlayButton inherits Rectangle {
+    in property <string> text;
+    callback clicked;
+
+    width: 280px;
+    height: 64px;
+    border-radius: 3px;
+    background: area.pressed ? #b9a64c : area.has-hover ? #eedd80 : #d8c66a;
+    drop-shadow-blur: area.has-hover ? 36px : 14px;
+    drop-shadow-color: #f0df8055;
+    animate background { duration: 140ms; }
+    animate drop-shadow-blur { duration: 260ms; easing: ease-out; }
+
+    Text {
+        text: root.text;
+        color: #1b1808;
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: 6px;
+    }
+
+    area := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component AppWindow inherits Window {
+    in property <string> status;
+    callback play();
+
+    property <bool> shown;
+
+    title: "Substratum";
+    preferred-width: 1100px;
+    preferred-height: 640px;
+    min-width: 820px;
+    min-height: 500px;
+    background: #070604;
+
+    init => { shown = true; }
+
+    Rectangle {
+        background: @radial-gradient(circle, #3b3416 0%, #17140a 55%, #070604 100%);
+    }
+
+    VerticalLayout {
+        opacity: shown ? 1 : 0;
+        animate opacity { duration: 1200ms; easing: ease-out; }
+        padding: 64px;
+        spacing: 14px;
+        alignment: end;
+
+        Text {
+            text: "SUBSTRATUM";
+            color: #efe3a6;
+            font-size: 64px;
+            font-weight: 900;
+            letter-spacing: 12px;
+        }
+
+        Text {
+            text: "Уровень 0 ждёт";
+            color: #a89a5c;
+            font-size: 18px;
+            letter-spacing: 2px;
+        }
+
+        Rectangle { height: 26px; }
+
+        HorizontalLayout {
+            alignment: start;
+            PlayButton {
+                text: "ИГРАТЬ";
+                clicked => { root.play(); }
+            }
+        }
+
+        Text {
+            text: root.status;
+            color: #8c8150;
+            font-size: 14px;
+            height: 20px;
+        }
+    }
+}

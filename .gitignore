@@ -33,3 +33,6 @@ Thumbs.db
 /docs/
 /tools/
 /game/README-modrinth.md
+
+# Rust
+/launcher/target/

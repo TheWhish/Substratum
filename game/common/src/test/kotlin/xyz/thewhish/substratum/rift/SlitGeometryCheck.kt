@@ -161,7 +161,7 @@ private fun checkNoCameraWrites(): Int {
     val root = generateSequence(File("").absoluteFile) { it.parentFile }
         .firstOrNull { File(it, "settings.gradle").isFile }
         ?: error("no repository root above ${File("").absolutePath}")
-    val roots = listOf("common", "fabric", "neoforge").map { File(root, "$it/src/main") }
+    val roots = listOf("common", "fabric").map { File(root, "$it/src/main") }
     for (dir in roots) check(dir.isDirectory) { "$dir is missing — the scan would pass by finding nothing" }
 
     var scanned = 0
