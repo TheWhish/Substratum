@@ -1,9 +1,9 @@
 import { Theme } from "theme.slint";
-import { CodeCells, LaunchButton, Marker, Osd, PanelHeader, Setting, SlotCard } from "widgets.slint";
+import { CodeCells, LaunchButton, Marker, Osd, PanelHeader, Setting, Slot, SlotCard } from "widgets.slint";
 
 export component PlayPanel inherits VerticalLayout {
-    in property <string> nick;
-    in property <image> face;
+    in property <[Slot]> slots;
+    in property <bool> online;
     in property <string> team-code;
     in property <[string]> team-cells;
     in property <[string]> join-cells;
@@ -14,6 +14,8 @@ export component PlayPanel inherits VerticalLayout {
     in property <bool> playing;
     callback join-edited(string);
     callback join();
+    callback leave();
+    callback kick(int);
     callback launch();
     callback cancel();
 
@@ -24,6 +26,9 @@ export component PlayPanel inherits VerticalLayout {
     property <bool> join-ready: root.join-text.character-count == 8;
 
     function copy-code() {
+        if root.team-code == "" {
+            return;
+        }
         clipboard.select-all();
         clipboard.copy();
         clipboard.clear-selection();
@@ -65,16 +70,36 @@ export component PlayPanel inherits VerticalLayout {
         visible: false;
     }
 
-    PanelHeader { title: @tr("КОМАНДА"); detail: "1 / 4"; }
+    HorizontalLayout {
+        spacing: Theme.inner-gap;
+
+        PanelHeader {
+            title: @tr("КОМАНДА");
+            detail: root.online ? root.slots.length + " / 4" : @tr("НЕТ СВЯЗИ");
+        }
+        if root.slots.length > 1: Osd {
+            text: @tr("ПОКИНУТЬ");
+            color: leave-area.has-hover ? Theme.text : Theme.text-mute;
+            animate color { duration: Theme.hover; easing: ease-out; }
+
+            leave-area := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.leave(); }
+            }
+        }
+    }
     Rectangle { height: Theme.inner-gap; }
 
     HorizontalLayout {
         spacing: Theme.inner-gap;
         vertical-stretch: 1;
-        SlotCard { width: root.card-width; number: "01"; nick: root.nick; face: root.face; host: true; }
-        SlotCard { width: root.card-width; number: "02"; }
-        SlotCard { width: root.card-width; number: "03"; }
-        SlotCard { width: root.card-width; number: "04"; }
+        for index in 4: SlotCard {
+            width: root.card-width;
+            number: "0" + (index + 1);
+            slot: root.slots[index];
+            kick => { root.kick(index); }
+            clicked => { root.copy-code(); }
+        }
     }
 
     Rectangle { height: Theme.gap; }
@@ -176,28 +201,27 @@ export component PlayPanel inherits VerticalLayout {
 component SkinTile inherits Rectangle {
     in property <image> figure;
     in property <bool> selected;
-    in property <string> label;
+    in property <bool> live: true;
     callback clicked();
 
     width: 48px;
     height: 80px;
 
-    if root.label == "": Image {
+    Image {
         width: 32px;
         height: 64px;
         source: root.figure;
         image-rendering: pixelated;
     }
-    if root.label != "": Osd { text: root.label; }
 
     Rectangle {
         border-width: 1px;
-        border-color: root.selected || area.has-hover ? Theme.text : Theme.line;
+        border-color: root.selected || (root.live && area.has-hover) ? Theme.text : Theme.line;
         animate border-color { duration: Theme.hover; easing: ease-out; }
     }
 
     area := TouchArea {
-        mouse-cursor: pointer;
+        mouse-cursor: root.live ? pointer : default;
         clicked => { root.clicked(); }
     }
 }
@@ -206,13 +230,12 @@ export component ProfilePanel inherits HorizontalLayout {
     in-out property <string> nick;
     in property <[image]> presets;
     in property <int> skin;
-    in property <bool> custom-skin;
-    in property <image> custom-front;
     in property <image> front;
     in property <image> back;
+    in property <bool> locked;
     callback nick-edited(string);
     callback select-skin(int);
-    callback pick-skin();
+    callback refused();
 
     property <bool> behind;
     property <int> length: root.nick.character-count;
@@ -240,13 +263,17 @@ export component ProfilePanel inherits HorizontalLayout {
                 x: 0px;
                 width: parent.width;
                 text <=> root.nick;
-                color: Theme.text;
+                read-only: root.locked;
+                color: root.locked ? Theme.text-dim : Theme.text;
                 font-size: Theme.code-size;
                 single-line: true;
                 vertical-alignment: center;
                 selection-background-color: Theme.line;
                 selection-foreground-color: Theme.text;
                 edited => { root.nick-edited(self.text); }
+            }
+            if root.locked: TouchArea {
+                clicked => { root.refused(); }
             }
             Rectangle {
                 y: parent.height - 1px;
@@ -256,19 +283,7 @@ export component ProfilePanel inherits HorizontalLayout {
             }
         }
         Rectangle { height: Theme.gap; }
-        HorizontalLayout {
-            Osd { text: @tr("СКИН"); horizontal-stretch: 1; }
-            Osd {
-                text: @tr("ВЫБРАТЬ PNG");
-                color: pick-area.has-hover ? Theme.text : Theme.text-mute;
-                animate color { duration: Theme.hover; easing: ease-out; }
-
-                pick-area := TouchArea {
-                    mouse-cursor: pointer;
-                    clicked => { root.pick-skin(); }
-                }
-            }
-        }
+        Osd { text: @tr("СКИН"); }
         Rectangle { height: 8px; }
         HorizontalLayout {
             spacing: 12px;
@@ -277,17 +292,12 @@ export component ProfilePanel inherits HorizontalLayout {
             for figure[index] in root.presets: SkinTile {
                 figure: figure;
                 selected: root.skin == index;
-                clicked => { root.select-skin(index); }
-            }
-            SkinTile {
-                figure: root.custom-front;
-                label: root.custom-skin ? "" : "PNG";
-                selected: root.skin == root.presets.length;
+                live: !root.locked;
                 clicked => {
-                    if root.custom-skin {
-                        root.select-skin(root.presets.length);
+                    if root.locked {
+                        root.refused();
                     } else {
-                        root.pick-skin();
+                        root.select-skin(index);
                     }
                 }
             }
@@ -345,7 +355,9 @@ export component SettingsPanel inherits GridLayout {
     in property <int> window-mode;
     in property <int> language;
     in property <int> after-launch;
+    in property <bool> locked;
     callback adjust(Choice, int);
+    callback refused();
     callback repair();
     callback open-home();
     callback open-logs();
@@ -353,7 +365,7 @@ export component SettingsPanel inherits GridLayout {
 
     property <[string]> windows: [@tr("ПОЛНЫЙ ЭКРАН"), "1280 × 720", "1600 × 900", "1920 × 1080"];
     property <[string]> languages: ["РУССКИЙ", "ENGLISH"];
-    property <[string]> afterwards: [@tr("СКРЫТЬ ЛАУНЧЕР"), @tr("ОСТАВИТЬ ОТКРЫТЫМ"), @tr("ЗАКРЫТЬ ЛАУНЧЕР")];
+    property <[string]> afterwards: [@tr("СВЕРНУТЬ ЛАУНЧЕР"), @tr("ОСТАВИТЬ ОТКРЫТЫМ")];
     property <length> column: (root.width - Theme.gap) / 2;
 
     spacing-horizontal: Theme.gap;
@@ -367,24 +379,32 @@ export component SettingsPanel inherits GridLayout {
                 label: @tr("ПАМЯТЬ");
                 value: root.memory == 0 ? @tr("АВТО · {} ГБ", root.auto-memory) : @tr("{} ГБ", root.memory);
                 selector: true;
+                locked: root.locked;
+                refused => { root.refused(); }
                 stepped(delta) => { root.adjust(Choice.memory, delta); }
             }
             Setting {
                 label: @tr("ОКНО");
                 value: root.windows[root.window-mode];
                 selector: true;
+                locked: root.locked;
+                refused => { root.refused(); }
                 stepped(delta) => { root.adjust(Choice.window, delta); }
             }
             Setting {
                 label: @tr("ЯЗЫК");
                 value: root.languages[root.language];
                 selector: true;
+                locked: root.locked;
+                refused => { root.refused(); }
                 stepped(delta) => { root.adjust(Choice.language, delta); }
             }
             Setting {
                 label: @tr("ПОСЛЕ ЗАПУСКА");
                 value: root.afterwards[root.after-launch];
                 selector: true;
+                locked: root.locked;
+                refused => { root.refused(); }
                 stepped(delta) => { root.adjust(Choice.after-launch, delta); }
             }
         }
@@ -392,7 +412,7 @@ export component SettingsPanel inherits GridLayout {
             width: root.column;
             title: @tr("ФАЙЛЫ");
             Setting { label: @tr("ПАПКА ИГРЫ"); value: "%APPDATA%\\SUBSTRATUM"; action: true; activated => { root.open-home(); } }
-            Setting { label: @tr("ПРОВЕРИТЬ И ПОЧИНИТЬ"); action: true; activated => { root.repair(); } }
+            Setting { label: @tr("ПРОВЕРИТЬ И ПОЧИНИТЬ"); action: true; locked: root.locked; refused => { root.refused(); } activated => { root.repair(); } }
             Setting { label: @tr("ОТКРЫТЬ ЛОГИ"); action: true; activated => { root.open-logs(); } }
             Setting { label: @tr("ОТКРЫТЬ СКРИНШОТЫ"); action: true; activated => { root.open-screenshots(); } }
         }

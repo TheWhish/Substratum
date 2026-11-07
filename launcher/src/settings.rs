@@ -81,13 +81,13 @@ impl Language {
 #[serde(rename_all = "kebab-case")]
 pub enum AfterLaunch {
     #[default]
-    Hide,
+    #[serde(alias = "hide", alias = "close")]
+    Minimize,
     Keep,
-    Close,
 }
 
 impl AfterLaunch {
-    pub const ALL: [AfterLaunch; 3] = [AfterLaunch::Hide, AfterLaunch::Keep, AfterLaunch::Close];
+    pub const ALL: [AfterLaunch; 2] = [AfterLaunch::Minimize, AfterLaunch::Keep];
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -195,8 +195,8 @@ mod tests {
         assert_eq!(step(&Window::ALL, Window::FullHd, 1), Window::Fullscreen);
         assert_eq!(step(&Window::ALL, Window::Fullscreen, -1), Window::FullHd);
         assert_eq!(
-            step(&AfterLaunch::ALL, AfterLaunch::Hide, 2),
-            AfterLaunch::Close
+            step(&AfterLaunch::ALL, AfterLaunch::Minimize, 3),
+            AfterLaunch::Keep
         );
     }
 
@@ -213,5 +213,9 @@ mod tests {
         let partial: Settings = toml::from_str("window = \"hd\"").unwrap();
         assert_eq!(partial.window, Window::Hd);
         assert_eq!(partial.memory, 0);
+        for old in ["hide", "close"] {
+            let migrated: Settings = toml::from_str(&format!("after-launch = \"{old}\"")).unwrap();
+            assert_eq!(migrated.after_launch, AfterLaunch::Minimize);
+        }
     }
 }

@@ -36,3 +36,5 @@ Thumbs.db
 
 # Rust
 /launcher/target/
+/backend/target/
+/protocol/target/

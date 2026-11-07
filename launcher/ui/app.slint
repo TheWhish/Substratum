@@ -3,7 +3,7 @@ import "../assets/fonts/IBMPlexMono-Medium.ttf";
 import "../assets/fonts/VT323-Regular.ttf";
 import { Theme } from "theme.slint";
 import { Logo, VhsLayer } from "vhs.slint";
-import { Marker, MenuItem, Osd, RecDot, WindowAction, WindowButton } from "widgets.slint";
+import { Marker, MenuItem, Osd, RecDot, Slot, WindowAction, WindowButton } from "widgets.slint";
 import { Choice, PlayPanel, ProfilePanel, SettingsPanel } from "pages.slint";
 
 export { Choice } from "pages.slint";
@@ -16,7 +16,9 @@ export enum Launch { started, nick, failed }
 
 export enum Place { home, logs, screenshots, latest-log }
 
-export enum Pick { chosen, cancelled, rejected, failed }
+export enum Rejection { unknown, full, locked, nick-taken, failed }
+
+export { Slot } from "widgets.slint";
 
 export component AppWindow inherits Window {
     in property <string> version;
@@ -33,13 +35,12 @@ export component AppWindow inherits Window {
     in property <[string]> join-cells;
     in-out property <string> join-text;
     in-out property <string> nick;
-    in property <image> face;
+    in property <[Slot]> slots;
+    in property <bool> team-online;
     in property <image> front;
     in property <image> back;
     in property <[image]> presets;
-    in property <image> custom-front;
     in property <int> skin;
-    in property <bool> custom-skin;
     in property <string> build;
     in property <bool> busy;
     in property <bool> preparing;
@@ -61,9 +62,11 @@ export component AppWindow inherits Window {
     callback cancel();
     callback drag-window(length, length);
     callback join-edited(string);
+    callback join-team(string);
+    callback leave-team();
+    callback kick(int);
     callback nick-edited(string);
     callback select-skin(int);
-    callback pick-skin() -> Pick;
 
     property <Panel> panel: Panel.play;
     property <Panel> target: Panel.play;
@@ -149,18 +152,45 @@ export component AppWindow inherits Window {
     }
 
     function repair() {
-        if !root.busy {
+        if !root.busy && !root.playing {
             root.crashed = false;
             root.install();
         }
     }
 
-    function pick() {
-        let pick = root.pick-skin();
-        if pick == Pick.rejected {
-            root.say(@tr("НУЖЕН PNG 64×64 ДО 256 КБ"), true);
-        } else if pick == Pick.failed {
-            root.say(@tr("НЕ УДАЛОСЬ СОХРАНИТЬ СКИН"), true);
+    function refuse() {
+        root.say(@tr("ЗАКРОЙТЕ ИГРУ, ЧТОБЫ ИЗМЕНИТЬ"), false);
+    }
+
+    function join() {
+        if !root.team-online {
+            root.say(@tr("НЕТ СВЯЗИ С СЕРВЕРОМ, ПОПРОБУЙТЕ ПОЗЖЕ"), true);
+            return;
+        }
+        root.join-team(root.join-text);
+        root.join-text = "";
+        root.join-edited("");
+    }
+
+    public function rejected(reason: Rejection) {
+        if reason == Rejection.unknown {
+            root.say(@tr("КОМАНДА С ТАКИМ КОДОМ НЕ НАЙДЕНА"), true);
+        } else if reason == Rejection.full {
+            root.say(@tr("В КОМАНДЕ НЕТ МЕСТА"), true);
+        } else if reason == Rejection.locked {
+            root.say(@tr("КОМАНДА СЕЙЧАС В ИГРЕ"), true);
+        } else if reason == Rejection.nick-taken {
+            root.say(@tr("ЭТОТ НИК УЖЕ ЕСТЬ В КОМАНДЕ"), true);
+        } else {
+            root.say(@tr("КОМАНДА НЕ ПРИНЯЛА ЗАПРОС"), true);
+        }
+    }
+
+    public function leave() {
+        if root.playing {
+            root.say(@tr("СНАЧАЛА ЗАКРОЙТЕ ИГРУ"), true);
+        } else {
+            root.quit();
         }
     }
 
@@ -337,7 +367,7 @@ export component AppWindow inherits Window {
                                 }
                                 MenuItem {
                                     label: @tr("ВЫХОД");
-                                    activated => { root.quit(); }
+                                    activated => { root.leave(); }
                                 }
                             }
                         }
@@ -360,8 +390,8 @@ export component AppWindow inherits Window {
                                 }
 
                                 if root.panel == Panel.play: PlayPanel {
-                                    nick: root.nick;
-                                    face: root.face;
+                                    slots: root.slots;
+                                    online: root.team-online;
                                     team-code: root.team-code;
                                     team-cells: root.team-cells;
                                     join-cells: root.join-cells;
@@ -371,21 +401,22 @@ export component AppWindow inherits Window {
                                     installed: root.build != "";
                                     playing: root.playing;
                                     join-edited(text) => { root.join-edited(text); }
-                                    join => { root.say(@tr("СВЯЗЬ С КОМАНДОЙ ПОКА НЕДОСТУПНА"), false); }
+                                    join => { root.join(); }
+                                    leave => { root.leave-team(); }
+                                    kick(index) => { root.kick(index); }
                                     launch => { root.launch(); }
                                     cancel => { root.cancel(); }
                                 }
                                 if root.panel == Panel.profile: ProfilePanel {
                                     nick <=> root.nick;
                                     presets: root.presets;
-                                    custom-front: root.custom-front;
                                     skin: root.skin;
-                                    custom-skin: root.custom-skin;
+                                    locked: root.playing;
                                     front: root.front;
                                     back: root.back;
                                     nick-edited(text) => { root.nick-edited(text); }
                                     select-skin(index) => { root.select-skin(index); }
-                                    pick-skin => { root.pick(); }
+                                    refused => { root.refuse(); }
                                 }
                                 if root.panel == Panel.settings: SettingsPanel {
                                     version: root.version;
@@ -395,6 +426,8 @@ export component AppWindow inherits Window {
                                     window-mode: root.window-mode;
                                     language: root.language;
                                     after-launch: root.after-launch;
+                                    locked: root.playing;
+                                    refused => { root.refuse(); }
                                     adjust(choice, delta) => { root.adjust(choice, delta); }
                                     open-home => { root.reveal(Place.home, @tr("ВЕРСИЯ ЕЩЁ НЕ УСТАНОВЛЕНА")); }
                                     repair => { root.repair(); }
@@ -481,7 +514,7 @@ export component AppWindow inherits Window {
                 x: root.width - Theme.edge - 21px;
                 y: Theme.frame - 11px;
                 action: WindowAction.close;
-                clicked => { root.quit(); }
+                clicked => { root.leave(); }
             }
 
             VhsLayer {

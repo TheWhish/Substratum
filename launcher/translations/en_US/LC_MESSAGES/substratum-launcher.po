@@ -18,6 +18,15 @@ msgstr "AUTO · {} GB"
 msgid "АВТОР"
 msgstr "AUTHOR"
 
+msgid "В ИГРЕ"
+msgstr "IN GAME"
+
+msgid "В КОМАНДЕ НЕТ МЕСТА"
+msgstr "THE TEAM IS FULL"
+
+msgid "В МЕНЮ"
+msgstr "IN MENU"
+
 msgid "ВЕРСИЯ {}"
 msgstr "VERSION {}"
 
@@ -33,17 +42,23 @@ msgstr "VERSION NOT INSTALLED"
 msgid "ВЕРСИЯ УСТАНОВЛЕНА"
 msgstr "VERSION INSTALLED"
 
-msgid "ВОЙТИ ПО КОДУ"
-msgstr "JOIN BY CODE"
-
 msgid "ВОЙТИ"
 msgstr "JOIN"
 
-msgid "ВЫБРАТЬ PNG"
-msgstr "CHOOSE PNG"
+msgid "ВОЙТИ ПО КОДУ"
+msgstr "JOIN BY CODE"
 
 msgid "ВЫХОД"
 msgstr "EXIT"
+
+msgid "ГОТОВ"
+msgstr "READY"
+
+msgid "ДРУГАЯ ВЕРСИЯ"
+msgstr "OTHER VERSION"
+
+msgid "ЗАГРУЗКА"
+msgstr "LOADING"
 
 msgid "ЗАГРУЗКА {}%"
 msgstr "DOWNLOADING {}%"
@@ -51,14 +66,14 @@ msgstr "DOWNLOADING {}%"
 msgid "ЗАГРУЗКА ОТМЕНЕНА"
 msgstr "DOWNLOAD CANCELLED"
 
-msgid "ЗАГРУЗКА"
-msgstr "LOADING"
-
-msgid "ЗАКРЫТЬ ЛАУНЧЕР"
-msgstr "CLOSE LAUNCHER"
+msgid "ЗАКРОЙТЕ ИГРУ, ЧТОБЫ ИЗМЕНИТЬ"
+msgstr "CLOSE THE GAME TO CHANGE THIS"
 
 msgid "ЗАПУСК"
 msgstr "LAUNCH"
+
+msgid "ИГРА"
+msgstr "GAME"
 
 msgid "ИГРА ВЫЛЕТЕЛА"
 msgstr "GAME CRASHED"
@@ -66,20 +81,29 @@ msgstr "GAME CRASHED"
 msgid "ИГРА ЗАПУЩЕНА"
 msgstr "GAME RUNNING"
 
-msgid "ИГРА"
-msgstr "GAME"
-
 msgid "ИГРАТЬ"
 msgstr "PLAY"
 
 msgid "ИНТЕРФЕЙС"
 msgstr "INTERFACE"
 
+msgid "ИСКЛЮЧИТЬ"
+msgstr "KICK"
+
 msgid "КОД КОМАНДЫ"
 msgstr "TEAM CODE"
 
 msgid "КОМАНДА"
 msgstr "TEAM"
+
+msgid "КОМАНДА НЕ ПРИНЯЛА ЗАПРОС"
+msgstr "THE TEAM DECLINED THE REQUEST"
+
+msgid "КОМАНДА С ТАКИМ КОДОМ НЕ НАЙДЕНА"
+msgstr "NO TEAM WITH THIS CODE"
+
+msgid "КОМАНДА СЕЙЧАС В ИГРЕ"
+msgstr "THE TEAM IS IN A GAME RIGHT NOW"
 
 msgid "КОПИРОВАТЬ"
 msgstr "COPY"
@@ -96,17 +120,23 @@ msgstr "NO LOGS YET"
 msgid "НАСТРОЙКИ"
 msgstr "SETTINGS"
 
+msgid "НЕ В ИГРЕ"
+msgstr "NOT IN GAME"
+
+msgid "НЕ В СЕТИ"
+msgstr "OFFLINE"
+
 msgid "НЕ УДАЛОСЬ ЗАПИСАТЬ ФАЙЛЫ, ПРОВЕРЬТЕ МЕСТО НА ДИСКЕ"
 msgstr "COULD NOT WRITE FILES, CHECK DISK SPACE"
 
 msgid "НЕ УДАЛОСЬ ЗАПУСТИТЬ ИГРУ, ПРОВЕРЬТЕ ВЕРСИЮ В НАСТРОЙКАХ"
 msgstr "COULD NOT START THE GAME, REPAIR IT IN SETTINGS"
 
-msgid "НЕ УДАЛОСЬ СОХРАНИТЬ СКИН"
-msgstr "COULD NOT SAVE THE SKIN"
-
 msgid "НЕ УДАЛОСЬ УСТАНОВИТЬ ВЕРСИЮ"
 msgstr "COULD NOT INSTALL THE VERSION"
+
+msgid "НЕТ СВЯЗИ"
+msgstr "OFFLINE"
 
 msgid "НЕТ СВЯЗИ С СЕРВЕРОМ, ПОПРОБУЙТЕ ПОЗЖЕ"
 msgstr "NO CONNECTION TO THE SERVER, TRY LATER"
@@ -116,9 +146,6 @@ msgstr "NICKNAME"
 
 msgid "НИК: 3–16 ЛАТИНСКИХ БУКВ, ЦИФР ИЛИ _"
 msgstr "NICKNAME: 3–16 LATIN LETTERS, DIGITS OR _"
-
-msgid "НУЖЕН PNG 64×64 ДО 256 КБ"
-msgstr "NEEDS A 64×64 PNG UP TO 256 KB"
 
 msgid "О ПРОГРАММЕ"
 msgstr "ABOUT"
@@ -159,6 +186,9 @@ msgstr "REWIND"
 msgid "ПОДГОТОВКА"
 msgstr "PREPARING"
 
+msgid "ПОКИНУТЬ"
+msgstr "LEAVE"
+
 msgid "ПОЛНЫЙ ЭКРАН"
 msgstr "FULLSCREEN"
 
@@ -174,11 +204,11 @@ msgstr "VERIFYING {}%"
 msgid "ПРОФИЛЬ"
 msgstr "PROFILE"
 
+msgid "СВЕРНУТЬ ЛАУНЧЕР"
+msgstr "MINIMIZE LAUNCHER"
+
 msgid "СВОБОДНО"
 msgstr "EMPTY"
-
-msgid "СВЯЗЬ С КОМАНДОЙ ПОКА НЕДОСТУПНА"
-msgstr "TEAM CONNECTION IS NOT AVAILABLE YET"
 
 msgid "СКИН"
 msgstr "SKIN"
@@ -189,8 +219,8 @@ msgstr "COPIED"
 msgid "СКРИНШОТОВ ПОКА НЕТ"
 msgstr "NO SCREENSHOTS YET"
 
-msgid "СКРЫТЬ ЛАУНЧЕР"
-msgstr "HIDE LAUNCHER"
+msgid "СНАЧАЛА ЗАКРОЙТЕ ИГРУ"
+msgstr "CLOSE THE GAME FIRST"
 
 msgid "СПИНА"
 msgstr "BACK"
@@ -206,6 +236,9 @@ msgstr "FILES"
 
 msgid "ХОСТ"
 msgstr "HOST"
+
+msgid "ЭТОТ НИК УЖЕ ЕСТЬ В КОМАНДЕ"
+msgstr "THIS NICKNAME IS ALREADY IN THE TEAM"
 
 msgid "ЯЗЫК"
 msgstr "LANGUAGE"

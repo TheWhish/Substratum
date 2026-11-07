@@ -4,11 +4,13 @@
   "package": "xyz.thewhish.substratum.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "AutosaveMixin",
     "DeathLootMixin",
     "FallDamageMixin",
     "FallDistanceResetMixin",
     "LevelZeroSightMixin",
     "RespawnMixin",
+    "TeamLoginMixin",
     "WorldDimensionsMixin"
   ],
   "client": [
@@ -19,8 +21,12 @@
     "FogMixin",
     "FovMixin",
     "LocalSkinMixin",
+    "LoopbackHostMixin",
+    "MenuBackgroundMixin",
+    "MenuMusicMixin",
     "ReplayPositionMixin",
     "SceneDepthMixin",
+    "SecureChatToastMixin",
     "SkyBlackoutMixin"
   ],
   "injectors": { "defaultRequire": 1 }

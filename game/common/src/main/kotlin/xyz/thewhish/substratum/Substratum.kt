@@ -14,6 +14,7 @@ import xyz.thewhish.substratum.level.Homecoming
 import xyz.thewhish.substratum.level.LampBursts
 import xyz.thewhish.substratum.level.LevelRules
 import xyz.thewhish.substratum.level.PitExitGuard
+import xyz.thewhish.substratum.network.Gate
 import xyz.thewhish.substratum.network.ProbeSync
 import xyz.thewhish.substratum.network.SanitySync
 import xyz.thewhish.substratum.network.SmilerSync
@@ -72,6 +73,7 @@ object Substratum {
         VhsSync.register()
         SmilerSync.register()
         ProbeSync.register()
+        Gate.register()
         SmilerDirector.register()
         Director.register()
         CommandRegistrationEvent.EVENT.register { dispatcher, _, _ -> SubstratumCommand.register(dispatcher) }

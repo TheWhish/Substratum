@@ -1,0 +1,21 @@
+[package]
+name = "substratum-backend"
+version = "0.1.0"
+edition = "2024"
+description = "Team service for Substratum: codes, presence, start and traffic relay"
+license = "MIT"
+publish = false
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+[dependencies]
+axum = { version = "0.8.9", features = ["ws"] }
+ed25519-dalek = "3.0.0"
+futures-util = "0.3.34"
+getrandom = "0.4.3"
+serde_json = "1.0.154"
+substratum-protocol = { path = "../protocol" }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }

@@ -1,15 +1,6 @@
 use slint::{ModelRc, SharedString, VecModel};
 
-use crate::vhs::Rng;
-
-pub const LENGTH: usize = 8;
-pub const ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-
-pub fn generate(rng: &mut Rng) -> String {
-    (0..LENGTH)
-        .map(|_| ALPHABET[(rng.next() % ALPHABET.len() as u64) as usize] as char)
-        .collect()
-}
+use substratum_protocol::{CODE_ALPHABET as ALPHABET, CODE_LENGTH as LENGTH};
 
 pub fn sanitize(input: &str) -> String {
     input

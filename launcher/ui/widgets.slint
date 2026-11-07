@@ -118,20 +118,42 @@ export component PanelHeader inherits HorizontalLayout {
     }
 }
 
+export struct Slot {
+    uuid: string,
+    nick: string,
+    face: image,
+    host: bool,
+    state: int,
+    kickable: bool,
+}
+
 export component SlotCard inherits Rectangle {
     in property <string> number;
-    in property <string> nick;
-    in property <bool> host;
-    in property <image> face;
+    in property <Slot> slot;
+    callback kick();
+    callback clicked();
 
-    property <bool> taken: root.nick != "" || root.host;
+    property <bool> taken: root.slot.nick != "";
+    property <[string]> states: [@tr("НЕ В ИГРЕ"), @tr("В МЕНЮ"), @tr("ГОТОВ"), @tr("В ИГРЕ"), @tr("НЕ В СЕТИ"), @tr("ДРУГАЯ ВЕРСИЯ")];
+    property <[color]> inks: [Theme.text-dim, Theme.text-mute, Theme.tape, Theme.rec, Theme.text-dim, Theme.rec];
 
     min-height: 124px;
     border-width: 1px;
-    border-color: root.taken ? Theme.line : Theme.line-dim;
+    border-color: root.taken ? Theme.line : area.has-hover ? Theme.line : Theme.line-dim;
+    animate border-color { duration: Theme.hover; easing: ease-out; }
+
+    area := TouchArea {
+        mouse-cursor: root.taken ? default : pointer;
+        clicked => {
+            if !root.taken {
+                root.clicked();
+            }
+        }
+    }
 
     VerticalLayout {
         padding: 12px;
+        spacing: 4px;
 
         HorizontalLayout {
             Osd {
@@ -139,7 +161,21 @@ export component SlotCard inherits Rectangle {
                 color: root.taken ? Theme.text-mute : Theme.text-dim;
                 horizontal-stretch: 1;
             }
-            if root.host: Osd { text: @tr("ХОСТ"); color: Theme.text; }
+            if root.slot.host: Osd { text: @tr("ХОСТ"); color: Theme.text; }
+            if root.slot.kickable: Osd {
+                text: @tr("ИСКЛЮЧИТЬ");
+                color: kick-area.has-hover ? Theme.rec : area.has-hover || kick-area.has-hover ? Theme.text-mute : transparent;
+                animate color { duration: Theme.hover; easing: ease-out; }
+
+                kick-area := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.kick(); }
+                }
+            }
+        }
+        if root.taken: Osd {
+            text: root.states[root.slot.state];
+            color: root.inks[root.slot.state];
         }
 
         Rectangle { vertical-stretch: 1; }
@@ -150,11 +186,11 @@ export component SlotCard inherits Rectangle {
             Image {
                 width: 56px;
                 height: 56px;
-                source: root.face;
+                source: root.slot.face;
                 image-rendering: pixelated;
             }
             Text {
-                text: root.nick;
+                text: root.slot.nick;
                 color: Theme.text;
                 font-size: 16px;
                 vertical-alignment: bottom;
@@ -163,7 +199,7 @@ export component SlotCard inherits Rectangle {
         }
         if !root.taken: Text {
             text: @tr("СВОБОДНО");
-            color: Theme.text-dim;
+            color: area.has-hover ? Theme.text-mute : Theme.text-dim;
             font-size: Theme.body-size;
             height: 20px;
             vertical-alignment: bottom;
@@ -214,10 +250,12 @@ export component Setting inherits Rectangle {
     in property <string> value;
     in property <bool> selector;
     in property <bool> action;
+    in property <bool> locked;
     callback activated();
     callback stepped(int);
+    callback refused();
 
-    property <bool> live: root.action || root.selector;
+    property <bool> live: (root.action || root.selector) && !root.locked;
 
     height: Theme.row;
 
@@ -228,17 +266,19 @@ export component Setting inherits Rectangle {
     }
 
     area := TouchArea {
-        enabled: root.live;
+        enabled: root.action || root.selector;
         mouse-cursor: root.live ? pointer : default;
         clicked => {
-            if root.selector {
+            if root.locked {
+                root.refused();
+            } else if root.selector {
                 root.stepped(1);
             } else {
                 root.activated();
             }
         }
         scroll-event(event) => {
-            if !root.selector || event.delta-y == 0 {
+            if !root.live || !root.selector || event.delta-y == 0 {
                 return reject;
             }
             root.stepped(event.delta-y > 0 ? -1 : 1);
@@ -251,7 +291,7 @@ export component Setting inherits Rectangle {
 
         Text {
             text: root.label;
-            color: root.action ? Theme.text : Theme.text-mute;
+            color: root.action && !root.locked ? Theme.text : Theme.text-mute;
             font-size: Theme.body-size;
             vertical-alignment: center;
             horizontal-stretch: 1;
@@ -261,7 +301,7 @@ export component Setting inherits Rectangle {
             spacing: 12px;
             horizontal-stretch: 0;
 
-            if root.selector: Rectangle {
+            if root.selector && !root.locked: Rectangle {
                 width: 12px;
 
                 Marker {
@@ -277,7 +317,7 @@ export component Setting inherits Rectangle {
             }
             if root.value != "": Text {
                 text: root.value;
-                color: Theme.text;
+                color: root.locked ? Theme.text-dim : Theme.text;
                 font-size: Theme.body-size;
                 vertical-alignment: center;
             }

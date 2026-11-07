@@ -1,13 +1,10 @@
-use std::fs;
 use std::io::Cursor;
-use std::path::Path;
 
 use slint::{Image, Rgba8Pixel, SharedPixelBuffer};
 
-use crate::fetch::{Error, Result, io_error};
+use crate::fetch::{Error, Result};
 
 const SIDE: u32 = 64;
-const MAX_FILE: u64 = 256 * 1024;
 const DECODE_LIMIT: usize = 1024 * 1024;
 const OPAQUE: [Area; 3] = [(0, 0, 32, 16), (0, 16, 64, 16), (16, 48, 32, 16)];
 
@@ -22,19 +19,19 @@ pub struct Preset {
 pub const PRESETS: [Preset; 4] = [
     Preset {
         name: "yellow",
-        png: include_bytes!("../assets/skins/yellow.png"),
+        png: include_bytes!("../../game/common/src/main/resources/assets/substratum/textures/skin/yellow.png"),
     },
     Preset {
         name: "green",
-        png: include_bytes!("../assets/skins/green.png"),
+        png: include_bytes!("../../game/common/src/main/resources/assets/substratum/textures/skin/green.png"),
     },
     Preset {
         name: "red",
-        png: include_bytes!("../assets/skins/red.png"),
+        png: include_bytes!("../../game/common/src/main/resources/assets/substratum/textures/skin/red.png"),
     },
     Preset {
         name: "blue",
-        png: include_bytes!("../assets/skins/blue.png"),
+        png: include_bytes!("../../game/common/src/main/resources/assets/substratum/textures/skin/blue.png"),
     },
 ];
 
@@ -45,19 +42,6 @@ impl Skin {
     pub fn preset(preset: &Preset) -> Result<Skin> {
         Skin::decode(preset.png)
             .map_err(|reason| Error::Invalid(format!("skin {}: {reason}", preset.name)))
-    }
-
-    pub fn read(path: &Path) -> Result<Skin> {
-        let size = fs::metadata(path).map_err(io_error(path))?.len();
-        if size > MAX_FILE {
-            return Err(Error::Invalid(format!(
-                "{} is larger than {MAX_FILE} bytes",
-                path.display()
-            )));
-        }
-        let bytes = fs::read(path).map_err(io_error(path))?;
-        Skin::decode(&bytes)
-            .map_err(|reason| Error::Invalid(format!("{}: {reason}", path.display())))
     }
 
     fn decode(bytes: &[u8]) -> std::result::Result<Skin, String> {
@@ -100,20 +84,6 @@ impl Skin {
             skin.opaque(area);
         }
         Ok(skin)
-    }
-
-    pub fn encode(&self) -> Result<Vec<u8>> {
-        let mut bytes = Vec::new();
-        let mut encoder = png::Encoder::new(&mut bytes, SIDE, SIDE);
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        let encoded = encoder.write_header().and_then(|mut writer| {
-            writer
-                .write_image_data(&self.0)
-                .and_then(|()| writer.finish())
-        });
-        encoded.map_err(|error| Error::Invalid(format!("skin encoding failed: {error}")))?;
-        Ok(bytes)
     }
 
     pub fn front(&self) -> Image {
@@ -220,12 +190,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn presets_decode_and_survive_a_png_round_trip() {
+    fn presets_decode_with_a_transparent_overlay_gap() {
         for preset in &PRESETS {
             let skin = Skin::preset(preset).unwrap();
-            let decoded = Skin::decode(&skin.encode().unwrap()).unwrap();
-            assert!(decoded.0 == skin.0, "{}", preset.name);
-            assert_eq!(decoded.pixel(42, 10)[3], 0, "{}", preset.name);
+            assert_eq!(skin.pixel(42, 10)[3], 0, "{}", preset.name);
         }
     }
 

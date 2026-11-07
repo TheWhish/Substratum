@@ -12,6 +12,7 @@
     "immptl.MixinIPBlockManipulationClient",
     "immptl.MixinIPClientTeleportationManager",
     "immptl.MixinIPCrossPortalSound",
+    "immptl.MixinIPGcMonitor",
     "immptl.MixinIPModMainClient"
   ],
   "injectors": { "defaultRequire": 1 }

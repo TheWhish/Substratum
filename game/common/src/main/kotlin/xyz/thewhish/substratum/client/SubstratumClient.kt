@@ -19,6 +19,7 @@ import net.minecraft.world.level.BlockAndTintGetter
 import net.minecraft.world.level.Level
 import qouteall.imm_ptl.core.ClientWorldLoader
 import xyz.thewhish.substratum.Substratum
+import xyz.thewhish.substratum.client.menu.Menus
 import xyz.thewhish.substratum.level.SubstratumLevels
 import xyz.thewhish.substratum.network.ViewportSync
 import xyz.thewhish.substratum.registry.ModBlocks
@@ -31,6 +32,10 @@ import xyz.thewhish.substratum.smiler.client.SmilerRenderer
 object SubstratumClient {
 
     fun init() {
+        Launcher.require()
+        Link.start()
+        Menus.init()
+        ClientTickEvent.CLIENT_POST.register(Lobby::tick)
         ColorHandlerRegistry.registerBlockColors({ _, level, pos, tintIndex -> hostTint(level, pos, tintIndex) }, ModBlocks.RIFT_CUT)
         RenderTypeRegistry.register(RenderType.cutout(), ModBlocks.ALMOND_WATER.get())
         EntityRendererRegistry.register(ModEntities.SMILER, ::SmilerRenderer)
@@ -57,10 +62,12 @@ object SubstratumClient {
             Atmosphere.reset()
         }, Substratum.id("atmosphere"))
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register {
+            Lobby.entered(Minecraft.getInstance())
             forgetReportedViewport()
             ShaftDarkness.reset()
         }
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register {
+            Lobby.left()
             ShaftDarkness.reset()
             SanityClient.reset()
             Vhs.reset()

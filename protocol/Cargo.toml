@@ -1,0 +1,15 @@
+[package]
+name = "substratum-protocol"
+version = "0.1.0"
+edition = "2024"
+description = "Messages shared by the Substratum launcher and team service"
+license = "MIT"
+publish = false
+
+[dependencies]
+ed25519-dalek = "3.0.0"
+serde = { version = "1.0.229", features = ["derive"] }
+sha2 = "0.11.1"
+
+[dev-dependencies]
+serde_json = "1.0.154"

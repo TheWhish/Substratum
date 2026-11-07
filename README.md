@@ -8,6 +8,8 @@
 |---|---|---|
 | [`game`](game) | сама игра: мод Fabric для Minecraft 1.21.1 на Kotlin и Java | IntelliJ IDEA |
 | [`launcher`](launcher) | лаунчер на Rust и Slint | RustRover |
+| [`backend`](backend) | сервис команд на VPS: коды, состав, старт, пересылка трафика | RustRover |
+| [`protocol`](protocol) | сообщения между лаунчером и сервисом | RustRover |
 
 ## Сборка
 
@@ -33,6 +35,29 @@ cargo run
 cd launcher
 cargo test --release -- --ignored
 ```
+
+## Сервис команд
+
+Локально:
+
+```bash
+cd backend
+cargo run
+```
+
+Сервис слушает `127.0.0.1:7878` (меняется переменной `SUBSTRATUM_BIND`). Лаунчер по умолчанию ходит на боевой адрес, для локальной проверки укажите `SUBSTRATUM_BACKEND=ws://127.0.0.1:7878`. Второй лаунчер на том же компьютере запускается с отдельной папкой через `SUBSTRATUM_HOME`.
+
+На VPS сервис собирается `cargo build --release`, работает как служба systemd, а TLS и WebSocket снаружи принимает Caddy:
+
+```
+team.example.com {
+    reverse_proxy 127.0.0.1:7878 {
+        header_up X-Real-IP {client_ip}
+    }
+}
+```
+
+Сервис ограничивает число подключений с одного адреса и берёт адрес из `X-Real-IP`, поэтому строка `header_up` обязательна.
 
 ## Лицензия
 

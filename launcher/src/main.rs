@@ -7,6 +7,7 @@ mod launch;
 mod profile;
 mod settings;
 mod skin;
+mod team;
 #[cfg(test)]
 mod translations;
 mod vhs;
@@ -25,9 +26,10 @@ use profile::Profile;
 use settings::{AfterLaunch, Language, Settings, Window};
 use skin::{PRESETS, Skin};
 use slint::{
-    CloseRequestResponse, ComponentHandle, ModelRc, PhysicalPosition, Timer, TimerMode, VecModel,
-    Weak,
+    CloseRequestResponse, ComponentHandle, Model, ModelRc, PhysicalPosition, Timer, TimerMode,
+    VecModel, Weak,
 };
+use substratum_protocol::{Member, Presence, Refusal, Team, valid_nick};
 
 slint::include_modules!();
 
@@ -50,14 +52,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.set_build(install::installed(&home).unwrap_or_default().into());
     app.set_presets(presets());
     app.set_nick(profile.borrow().nick.as_str().into());
-    show_skin(&app, &home, &profile.borrow());
+    show_skin(&app, &profile.borrow());
 
-    let team_code = code::generate(&mut vhs::Rng::seeded());
-    app.set_team_code(team_code.as_str().into());
-    app.set_team_cells(code::cells(&team_code));
     app.set_join_cells(code::cells(""));
 
-    bind_profile(&app, &home, &profile);
+    let team = start_team(&app, &profile.borrow())?;
+    bind_team(&app, &team);
+    bind_profile(&app, &home, &profile, &team);
     bind_settings(&app, &home, &settings, total);
     let job: Rc<RefCell<Option<Job>>> = Rc::default();
 
@@ -77,29 +78,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let weak = app.as_weak();
-    let (root, player, options) = (home.clone(), profile.clone(), settings.clone());
+    let (root, player, options, link) = (home.clone(), profile.clone(), settings.clone(), team.link);
     app.on_play(move || {
         let Some(app) = weak.upgrade() else {
             return Launch::Failed;
         };
         let profile = player.borrow();
-        if !profile::valid_nick(&profile.nick) {
+        if !valid_nick(&profile.nick) {
             return Launch::Nick;
         }
         let options = *options.borrow();
-        match launch::start(&root, &profile, &options, options.heap(total)) {
+        match launch::start(&root, &profile, &options, options.heap(total), link) {
             Ok(game) => {
-                match options.after_launch {
-                    AfterLaunch::Close => {
-                        quit();
-                        return Launch::Started;
-                    }
-                    AfterLaunch::Hide => {
-                        if let Err(error) = app.hide() {
-                            eprintln!("failed to hide the launcher: {error}");
-                        }
-                    }
-                    AfterLaunch::Keep => {}
+                if options.after_launch == AfterLaunch::Minimize {
+                    app.window().set_minimized(true);
                 }
                 app.set_playing(true);
                 watch(game, app.as_weak());
@@ -142,9 +134,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     app.on_quit(quit);
-    app.window().on_close_requested(|| {
-        quit();
-        CloseRequestResponse::HideWindow
+    let weak = app.as_weak();
+    app.window().on_close_requested(move || {
+        if let Some(app) = weak.upgrade() {
+            app.invoke_leave();
+        }
+        CloseRequestResponse::KeepWindowShown
     });
 
     let weak = app.as_weak();
@@ -159,6 +154,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ));
     });
 
+    let (player, commands) = (profile.clone(), team.clone());
     let mut tape = vhs::Tape::new();
     let weak = app.as_weak();
     let ticker = Timer::default();
@@ -176,6 +172,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match job.worker.join() {
                 Ok(Ok(build)) => {
                     app.set_build(build.into());
+                    commands.send(team::Command::Profile(team_profile(&app, &player.borrow())));
                     app.invoke_finished(Outcome::Done);
                 }
                 Ok(Err(Error::Cancelled)) => app.invoke_finished(Outcome::Cancelled),
@@ -200,9 +197,14 @@ fn load_profile(home: &Path) -> fetch::Result<Profile> {
     })
 }
 
-fn bind_profile(app: &AppWindow, home: &Rc<Path>, profile: &Rc<RefCell<Profile>>) {
+fn bind_profile(
+    app: &AppWindow,
+    home: &Rc<Path>,
+    profile: &Rc<RefCell<Profile>>,
+    team: &team::Handle,
+) {
     let weak = app.as_weak();
-    let (root, player) = (home.clone(), profile.clone());
+    let (root, player, commands) = (home.clone(), profile.clone(), team.clone());
     app.on_nick_edited(move |text| {
         let Some(app) = weak.upgrade() else { return };
         let clean = profile::sanitize_nick(&text);
@@ -212,51 +214,144 @@ fn bind_profile(app: &AppWindow, home: &Rc<Path>, profile: &Rc<RefCell<Profile>>
         let mut profile = player.borrow_mut();
         profile.nick = clean;
         persist(&root, &profile);
+        if valid_nick(&profile.nick) {
+            commands.send(team::Command::Profile(team_profile(&app, &profile)));
+        }
     });
 
     let weak = app.as_weak();
-    let (root, player) = (home.clone(), profile.clone());
+    let (root, player, commands) = (home.clone(), profile.clone(), team.clone());
     app.on_select_skin(move |index| {
         let Some(app) = weak.upgrade() else { return };
         let mut profile = player.borrow_mut();
         match usize::try_from(index) {
             Ok(index) if index < PRESETS.len() => profile.choose_preset(index),
-            _ if profile.choose_custom(&root) => {}
             _ => return,
         }
         persist(&root, &profile);
-        show_skin(&app, &root, &profile);
-    });
-
-    let weak = app.as_weak();
-    let (root, player) = (home.clone(), profile.clone());
-    app.on_pick_skin(move || {
-        let Some(app) = weak.upgrade() else {
-            return Pick::Cancelled;
-        };
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("PNG", &["png"])
-            .set_parent(&app.window().window_handle())
-            .pick_file()
-        else {
-            return Pick::Cancelled;
-        };
-        let skin = match Skin::read(&path) {
-            Ok(skin) => skin,
-            Err(error) => {
-                eprintln!("rejected skin: {error}");
-                return Pick::Rejected;
-            }
-        };
-        let mut profile = player.borrow_mut();
-        if let Err(error) = profile.adopt_custom(&root, &skin) {
-            eprintln!("failed to store the skin: {error}");
-            return Pick::Failed;
+        show_skin(&app, &profile);
+        if valid_nick(&profile.nick) {
+            commands.send(team::Command::Profile(team_profile(&app, &profile)));
         }
-        persist(&root, &profile);
-        show_skin(&app, &root, &profile);
-        Pick::Chosen
     });
+}
+
+fn start_team(app: &AppWindow, profile: &Profile) -> Result<team::Handle, Box<dyn std::error::Error>> {
+    let weak = app.as_weak();
+    let handle = team::start(profile.signing_key()?, team_profile(app, profile), move |update| {
+        let weak = weak.clone();
+        let shown = slint::invoke_from_event_loop(move || {
+            if let Some(app) = weak.upgrade() {
+                show_team(&app, update);
+            }
+        });
+        if let Err(error) = shown {
+            eprintln!("failed to show the team: {error}");
+        }
+    })?;
+    show_team(
+        app,
+        team::Update {
+            online: false,
+            me: String::new(),
+            team: None,
+            refused: None,
+        },
+    );
+    Ok(handle)
+}
+
+fn bind_team(app: &AppWindow, team: &team::Handle) {
+    let commands = team.clone();
+    app.on_join_team(move |code| commands.send(team::Command::Join(code::sanitize(&code))));
+    let commands = team.clone();
+    app.on_leave_team(move || commands.send(team::Command::Leave));
+    let (weak, commands) = (app.as_weak(), team.clone());
+    app.on_kick(move |index| {
+        let Some(app) = weak.upgrade() else { return };
+        if let Some(slot) = app.get_slots().row_data(index as usize) {
+            commands.send(team::Command::Kick(slot.uuid.into()));
+        }
+    });
+}
+
+fn team_profile(app: &AppWindow, profile: &Profile) -> team::Profile {
+    team::Profile {
+        nick: profile.nick.clone(),
+        skin: profile.skin.clone(),
+        build: app.get_build().into(),
+    }
+}
+
+fn show_team(app: &AppWindow, update: team::Update) {
+    let code = update.team.as_ref().map_or("", |team| team.code.as_str());
+    app.set_team_online(update.online);
+    app.set_team_code(code.into());
+    app.set_team_cells(code::cells(code));
+    let slots = match &update.team {
+        Some(team) => team_slots(team, &update.me),
+        None => vec![Slot {
+            nick: app.get_nick(),
+            face: face(PRESETS.get(app.get_skin() as usize).map_or("", |preset| preset.name)),
+            host: true,
+            ..Slot::default()
+        }],
+    };
+    app.set_slots(ModelRc::new(VecModel::from(slots)));
+    if let Some(reason) = update.refused.and_then(rejection) {
+        app.invoke_rejected(reason);
+    }
+}
+
+fn team_slots(team: &Team, me: &str) -> Vec<Slot> {
+    let build = team.member(&team.host).map(|host| host.build.as_str());
+    let leading = team.host == me && team.session.is_none();
+    team.members
+        .iter()
+        .map(|member| Slot {
+            uuid: member.uuid.as_str().into(),
+            nick: member.nick.as_str().into(),
+            face: face(&member.skin),
+            host: member.uuid == team.host,
+            state: slot_state(member, build),
+            kickable: leading && member.uuid != me,
+        })
+        .collect()
+}
+
+fn slot_state(member: &Member, build: Option<&str>) -> i32 {
+    if !member.online {
+        return 4;
+    }
+    if build.is_some_and(|build| build != member.build) {
+        return 5;
+    }
+    match member.presence {
+        Presence::Away => 0,
+        Presence::Menu => 1,
+        Presence::Ready => 2,
+        Presence::Playing => 3,
+    }
+}
+
+fn face(skin: &str) -> slint::Image {
+    PRESETS
+        .iter()
+        .find(|preset| preset.name == skin)
+        .and_then(|preset| Skin::preset(preset).ok())
+        .map(|skin| skin.face())
+        .unwrap_or_default()
+}
+
+fn rejection(reason: Refusal) -> Option<Rejection> {
+    match reason {
+        Refusal::Unknown => Some(Rejection::Unknown),
+        Refusal::Full => Some(Rejection::Full),
+        Refusal::Locked => Some(Rejection::Locked),
+        Refusal::NickTaken => Some(Rejection::NickTaken),
+        Refusal::NotReady => None,
+        Refusal::NotHost | Refusal::Invalid => Some(Rejection::Failed),
+    }
 }
 
 fn load_settings(home: &Path) -> Settings {
@@ -329,30 +424,15 @@ fn persist(home: &Path, profile: &Profile) {
     }
 }
 
-fn show_skin(app: &AppWindow, home: &Path, profile: &Profile) {
-    let skin = profile.skin(home).or_else(|error| {
-        eprintln!("failed to read the skin, showing the default one: {error}");
-        Skin::preset(&PRESETS[0])
-    });
-    match skin {
+fn show_skin(app: &AppWindow, profile: &Profile) {
+    match profile.skin() {
         Ok(skin) => {
             app.set_front(skin.front());
             app.set_back(skin.back());
-            app.set_face(skin.face());
         }
         Err(error) => eprintln!("built-in skin is broken: {error}"),
     }
-    match Profile::custom_skin(home) {
-        Ok(custom) => {
-            app.set_custom_skin(custom.is_some());
-            app.set_custom_front(custom.map(|skin| skin.front()).unwrap_or_default());
-        }
-        Err(error) => {
-            eprintln!("failed to read the custom skin: {error}");
-            app.set_custom_skin(false);
-        }
-    }
-    app.set_skin(profile.preset().unwrap_or(PRESETS.len()) as i32);
+    app.set_skin(profile.preset() as i32);
 }
 
 fn presets() -> ModelRc<slint::Image> {
@@ -382,9 +462,7 @@ fn watch(mut game: Child, weak: Weak<AppWindow>) {
             let Some(app) = weak.upgrade() else { return };
             app.set_playing(false);
             app.set_crashed(crashed);
-            if let Err(error) = app.show() {
-                eprintln!("failed to show the launcher: {error}");
-            }
+            app.window().set_minimized(false);
         });
         if let Err(error) = returned {
             eprintln!("failed to return to the launcher: {error}");

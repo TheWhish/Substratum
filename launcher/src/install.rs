@@ -256,6 +256,9 @@ pub struct FabricLibrary {
 }
 
 pub fn home() -> Option<PathBuf> {
+    if let Some(home) = std::env::var_os("SUBSTRATUM_HOME") {
+        return Some(PathBuf::from(home));
+    }
     std::env::var_os("APPDATA").map(|appdata| PathBuf::from(appdata).join("Substratum"))
 }
 

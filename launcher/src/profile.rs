@@ -1,10 +1,11 @@
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ed25519_dalek::SigningKey;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+
+use substratum_protocol::NICK_MAX;
 
 use crate::fetch::{Error, Result, hex, io_error};
 use crate::install;
@@ -12,12 +13,7 @@ use crate::skin::{PRESETS, Skin};
 
 const FILE: &str = "profile.toml";
 const BROKEN: &str = "profile.broken.toml";
-const CUSTOM_SKIN: &str = "skins/custom.png";
-const ACTIVE_SKIN: &str = "skins/active.png";
-const CUSTOM: &str = "custom";
 const DEFAULT_NICK: &str = "PLAYER";
-pub const NICK_MAX: usize = 16;
-const NICK_MIN: usize = 3;
 
 #[derive(Serialize, Deserialize)]
 pub struct Profile {
@@ -47,9 +43,7 @@ impl Profile {
             .map_err(|error| Error::Invalid(format!("{}: {error}", path.display())))?;
         profile.signing_key()?;
         profile.nick = sanitize_nick(&profile.nick);
-        let known = PRESETS.iter().any(|preset| preset.name == profile.skin);
-        let custom = profile.skin == CUSTOM && home.join(CUSTOM_SKIN).is_file();
-        if !known && !custom {
+        if !PRESETS.iter().any(|preset| preset.name == profile.skin) {
             profile.skin = PRESETS[0].name.to_owned();
         }
         Ok(profile)
@@ -85,15 +79,10 @@ impl Profile {
 
     pub fn uuid(&self) -> Result<String> {
         let public = self.signing_key()?.verifying_key().to_bytes();
-        let digest = Sha256::digest(public);
-        let mut bytes = [0; 16];
-        bytes.copy_from_slice(&digest[..16]);
-        bytes[6] = bytes[6] & 0x0f | 0x40;
-        bytes[8] = bytes[8] & 0x3f | 0x80;
-        Ok(hex(&bytes))
+        Ok(substratum_protocol::uuid(&public))
     }
 
-    fn signing_key(&self) -> Result<SigningKey> {
+    pub fn signing_key(&self) -> Result<SigningKey> {
         let invalid = || Error::Invalid("profile key is not 32 hex bytes".to_owned());
         if self.key.len() != 64 {
             return Err(invalid());
@@ -106,8 +95,11 @@ impl Profile {
         Ok(SigningKey::from_bytes(&seed))
     }
 
-    pub fn preset(&self) -> Option<usize> {
-        PRESETS.iter().position(|preset| preset.name == self.skin)
+    pub fn preset(&self) -> usize {
+        PRESETS
+            .iter()
+            .position(|preset| preset.name == self.skin)
+            .unwrap_or(0)
     }
 
     pub fn choose_preset(&mut self, index: usize) {
@@ -116,39 +108,8 @@ impl Profile {
         }
     }
 
-    pub fn adopt_custom(&mut self, home: &Path, skin: &Skin) -> Result<()> {
-        install::save(&home.join(CUSTOM_SKIN), &skin.encode()?)?;
-        self.skin = CUSTOM.to_owned();
-        Ok(())
-    }
-
-    pub fn custom_skin(home: &Path) -> Result<Option<Skin>> {
-        let path = home.join(CUSTOM_SKIN);
-        match path.is_file() {
-            true => Skin::read(&path).map(Some),
-            false => Ok(None),
-        }
-    }
-
-    pub fn choose_custom(&mut self, home: &Path) -> bool {
-        let available = home.join(CUSTOM_SKIN).is_file();
-        if available {
-            self.skin = CUSTOM.to_owned();
-        }
-        available
-    }
-
-    pub fn skin(&self, home: &Path) -> Result<Skin> {
-        match self.preset() {
-            Some(index) => Skin::preset(&PRESETS[index]),
-            None => Skin::read(&home.join(CUSTOM_SKIN)),
-        }
-    }
-
-    pub fn active_skin(&self, home: &Path) -> Result<PathBuf> {
-        let path = home.join(ACTIVE_SKIN);
-        install::save(&path, &self.skin(home)?.encode()?)?;
-        Ok(path)
+    pub fn skin(&self) -> Result<Skin> {
+        Skin::preset(&PRESETS[self.preset()])
     }
 }
 
@@ -159,22 +120,12 @@ pub fn sanitize_nick(text: &str) -> String {
         .collect()
 }
 
-pub fn valid_nick(nick: &str) -> bool {
-    (NICK_MIN..=NICK_MAX).contains(&nick.len()) && sanitize_nick(nick) == nick
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn nicks_follow_minecraft_rules() {
-        for nick in ["Abc", "player_16_chars_", "PLAYER"] {
-            assert!(valid_nick(nick), "{nick}");
-        }
-        for nick in ["ab", "seventeen_chars__", "with space", "ник", "a-b", ""] {
-            assert!(!valid_nick(nick), "{nick}");
-        }
+    fn nicks_are_cleaned_to_minecraft_rules() {
         assert_eq!(
             sanitize_nick("ник Steve-_2 and more text"),
             "Steve_2andmorete"

@@ -17,7 +17,13 @@ pub fn instance(home: &Path) -> PathBuf {
     home.join("instance")
 }
 
-pub fn start(home: &Path, profile: &Profile, settings: &Settings, heap: u32) -> Result<Child> {
+pub fn start(
+    home: &Path,
+    profile: &Profile,
+    settings: &Settings,
+    heap: u32,
+    link: u16,
+) -> Result<Child> {
     let manifest = install::manifest(home)?;
     let version_dir = install::version_dir(home, &manifest.minecraft)?;
     let version: Version =
@@ -53,10 +59,10 @@ pub fn start(home: &Path, profile: &Profile, settings: &Settings, heap: u32) -> 
         ),
     ]);
 
-    let skin = profile.active_skin(home)?;
     let mut args = vec![
         format!("-Xmx{heap}G"),
-        format!("-Dsubstratum.skin={}", text(&skin)?),
+        format!("-Dsubstratum.skin={}", profile.skin),
+        format!("-Dsubstratum.link={link}"),
     ];
     if let Some(logging) = &version.logging {
         let config = inside(&assets.join("log_configs"), &logging.client.file.id)?;
@@ -81,6 +87,8 @@ pub fn start(home: &Path, profile: &Profile, settings: &Settings, heap: u32) -> 
         &[
             ("fullscreen", &fullscreen),
             ("lang", settings.language.minecraft()),
+            ("onboardAccessibility", "false"),
+            ("tutorialStep", "none"),
         ],
     )?;
 

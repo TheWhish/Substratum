@@ -1,4 +1,9 @@
 {
+  "music.menu": {
+    "sounds": [
+      { "name": "substratum:ambient/hum_60hz", "stream": true, "volume": 0.6 }
+    ]
+  },
   "hum_60hz": {
     "sounds": [
       { "name": "substratum:ambient/hum_60hz", "volume": 0.25, "attenuation_distance": 16 }
