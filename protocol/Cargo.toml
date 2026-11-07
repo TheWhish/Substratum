@@ -3,7 +3,7 @@ name = "substratum-protocol"
 version = "0.1.0"
 edition = "2024"
 description = "Messages shared by the Substratum launcher and team service"
-license = "MIT"
+license-file = "../LICENSE"
 publish = false
 
 [dependencies]

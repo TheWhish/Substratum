@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: launcher
+
+      - name: Check versions
+        run: |
+          $version = "$env:GITHUB_REF_NAME".Substring(1)
+          $mod = (Select-String -Path game/gradle.properties -Pattern '^mod_version=(.+)$').Matches[0].Groups[1].Value
+          $launcher = (Select-String -Path launcher/Cargo.toml -Pattern '^version = "(.+)"$').Matches[0].Groups[1].Value
+          if ($mod -ne $version -or $launcher -ne $version) {
+            throw "Tag $version does not match mod $mod and launcher $launcher"
+          }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Build the mod
+        working-directory: game
+        run: ./gradlew.bat build --quiet
+
+      - name: Build the launcher
+        working-directory: launcher
+        run: cargo build --release --locked --quiet
+
+      - name: Write the manifest
+        run: |
+          $base = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME"
+          $jar = "substratum-$env:VERSION.jar"
+          $exe = "substratum-launcher.exe"
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item "game/fabric/build/libs/$jar" dist/
+          Copy-Item "launcher/target/release/$exe" dist/
+          function Describe($file) {
+            $item = Get-Item "dist/$file"
+            [ordered]@{
+              url = "$base/$file"
+              size = $item.Length
+              sha256 = (Get-FileHash $item -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+          }
+          $manifest = Get-Content launcher/manifest.json -Raw | ConvertFrom-Json
+          $mod = @($manifest.mods | Where-Object { $_.file -like "substratum-*.jar" })
+          if ($mod.Count -ne 1) { throw "The manifest must list exactly one Substratum jar" }
+          $jarInfo = Describe $jar
+          $mod[0].file = $jar
+          $mod[0].url = $jarInfo.url
+          $mod[0].size = $jarInfo.size
+          $mod[0].sha256 = $jarInfo.sha256
+          $exeInfo = Describe $exe
+          $launcher = [ordered]@{
+            version = $env:VERSION
+            url = $exeInfo.url
+            size = $exeInfo.size
+            sha256 = $exeInfo.sha256
+          }
+          $manifest.build = $env:VERSION
+          $manifest | Add-Member -Force -NotePropertyName launcher -NotePropertyValue $launcher
+          $manifest | ConvertTo-Json -Depth 10 | Set-Content dist/manifest.json -Encoding utf8NoBOM
+          Get-Content dist/manifest.json
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$env:GITHUB_REF_NAME" dist/* --title "Substratum $env:VERSION" --notes-file .github/release-notes.md --latest
