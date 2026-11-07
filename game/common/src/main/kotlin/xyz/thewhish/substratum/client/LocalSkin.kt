@@ -7,12 +7,13 @@ import net.minecraft.resources.ResourceLocation
 import xyz.thewhish.substratum.Substratum
 
 object LocalSkin {
+    private const val DEFAULT = "yellow"
     private val skins = HashMap<String, PlayerSkin?>()
 
     @JvmStatic
     fun of(profile: GameProfile): PlayerSkin? {
         val own = profile.id == Minecraft.getInstance().user.profileId
-        val id = (if (own) Launcher.skin else Lobby.skinOf(profile.id)) ?: return null
+        val id = (if (own) Launcher.skin else Lobby.skinOf(profile.id)) ?: DEFAULT
         if (id !in skins) skins[id] = load(id)
         return skins[id]
     }

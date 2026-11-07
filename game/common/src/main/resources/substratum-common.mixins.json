@@ -27,7 +27,10 @@
     "ReplayPositionMixin",
     "SceneDepthMixin",
     "SecureChatToastMixin",
-    "SkyBlackoutMixin"
+    "SkyBlackoutMixin",
+    "SuitAnimationMixin",
+    "SuitModelMixin",
+    "SuitRendererMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }

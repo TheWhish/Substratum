@@ -2,7 +2,6 @@ package xyz.thewhish.substratum.client.menu
 
 import dev.architectury.platform.Platform
 import net.minecraft.client.gui.GuiGraphics
-import net.minecraft.client.gui.components.PlayerFaceRenderer
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.gui.screens.options.OptionsScreen
 import net.minecraft.network.chat.Component
@@ -10,6 +9,7 @@ import net.minecraft.resources.ResourceLocation
 import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.client.Link
 import xyz.thewhish.substratum.client.Lobby
+import xyz.thewhish.substratum.client.Suit
 
 class MainMenu(private var note: Component? = null) : Screen(Component.literal(TITLE)) {
     private var confirming = false
@@ -144,7 +144,7 @@ class MainMenu(private var note: Component? = null) : Screen(Component.literal(T
         team.members.forEachIndexed { index, member ->
             val y = EDGE + index * SLOT
             val skin = ResourceLocation.tryBuild(Substratum.ID, "textures/skin/${member.skin}.png")
-            if (skin != null) PlayerFaceRenderer.draw(graphics, skin, right - FACE, y, FACE)
+            if (skin != null) graphics.blit(skin, right - FACE, y, FACE, FACE, 8f, 8f, 8, 8, Suit.WIDTH, Suit.HEIGHT)
             val (label, color) = state(member)
             val textRight = right - FACE - SLOT_GAP
             graphics.drawString(font, member.nick, textRight - font.width(member.nick), y, Menus.TEXT, false)

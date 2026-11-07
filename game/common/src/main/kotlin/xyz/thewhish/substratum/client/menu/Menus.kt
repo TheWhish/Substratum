@@ -43,7 +43,9 @@ object Menus {
             }
         }
         ClientGuiEvent.INIT_POST.register { screen, _ -> if (screen is OptionsScreen) lockLanguage(screen) }
-        ClientGuiEvent.RENDER_POST.register { screen, graphics, _, _, _ -> Loading.renderScreen(graphics, screen) }
+        ClientGuiEvent.RENDER_POST.register { screen: Screen?, graphics, _, _, _ ->
+            if (screen != null) Loading.renderScreen(graphics, screen)
+        }
         ClientGuiEvent.RENDER_HUD.register { graphics, _ -> Loading.renderHud(graphics) }
     }
 

@@ -19,19 +19,19 @@ pub struct Preset {
 pub const PRESETS: [Preset; 4] = [
     Preset {
         name: "yellow",
-        png: include_bytes!("../../game/common/src/main/resources/assets/substratum/textures/skin/yellow.png"),
+        png: include_bytes!("../skins/yellow.png"),
     },
     Preset {
         name: "green",
-        png: include_bytes!("../../game/common/src/main/resources/assets/substratum/textures/skin/green.png"),
+        png: include_bytes!("../skins/green.png"),
     },
     Preset {
         name: "red",
-        png: include_bytes!("../../game/common/src/main/resources/assets/substratum/textures/skin/red.png"),
+        png: include_bytes!("../skins/red.png"),
     },
     Preset {
         name: "blue",
-        png: include_bytes!("../../game/common/src/main/resources/assets/substratum/textures/skin/blue.png"),
+        png: include_bytes!("../skins/blue.png"),
     },
 ];
 

@@ -64,6 +64,12 @@ object Lobby {
         return team?.members?.find { it.uuid == uuid }?.skin
     }
 
+    fun numberOf(id: UUID): Int {
+        val uuid = UndashedUuid.toString(id)
+        val index = team?.members?.indexOfFirst { it.uuid == uuid } ?: -1
+        return maxOf(index, 0) + 1
+    }
+
     fun launch(action: () -> Unit) {
         note = null
         if (team == null) {
