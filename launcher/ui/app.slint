@@ -4,7 +4,9 @@ import "../assets/fonts/VT323-Regular.ttf";
 import { Theme } from "theme.slint";
 import { Logo, VhsLayer } from "vhs.slint";
 import { Marker, MenuItem, Osd, RecDot, WindowAction, WindowButton } from "widgets.slint";
-import { PlayPanel, ProfilePanel, SettingsPanel } from "pages.slint";
+import { Choice, PlayPanel, ProfilePanel, SettingsPanel } from "pages.slint";
+
+export { Choice } from "pages.slint";
 
 enum Panel { play, profile, settings }
 
@@ -12,7 +14,7 @@ export enum Outcome { done, cancelled, network, disk, corrupt, failed }
 
 export enum Launch { started, nick, failed }
 
-export enum Place { logs, screenshots, latest-log }
+export enum Place { home, logs, screenshots, latest-log }
 
 export enum Pick { chosen, cancelled, rejected, failed }
 
@@ -45,9 +47,16 @@ export component AppWindow inherits Window {
     in property <float> speed;
     in property <bool> downloading;
     in-out property <bool> crashed;
+    in property <bool> playing;
+    in property <int> memory;
+    in property <int> auto-memory;
+    in property <int> window-mode;
+    in property <int> language;
+    in property <int> after-launch;
     callback quit();
     callback play() -> Launch;
     callback open(Place) -> bool;
+    callback adjust(Choice, int);
     callback install();
     callback cancel();
     callback drag-window(length, length);
@@ -123,7 +132,7 @@ export component AppWindow inherits Window {
     }
 
     function launch() {
-        if root.busy {
+        if root.busy || root.playing {
             return;
         }
         root.crashed = false;
@@ -360,6 +369,7 @@ export component AppWindow inherits Window {
                                     blink: root.blink;
                                     busy: root.busy;
                                     installed: root.build != "";
+                                    playing: root.playing;
                                     join-edited(text) => { root.join-edited(text); }
                                     join => { root.say(@tr("СВЯЗЬ С КОМАНДОЙ ПОКА НЕДОСТУПНА"), false); }
                                     launch => { root.launch(); }
@@ -379,6 +389,14 @@ export component AppWindow inherits Window {
                                 }
                                 if root.panel == Panel.settings: SettingsPanel {
                                     version: root.version;
+                                    build: root.build;
+                                    memory: root.memory;
+                                    auto-memory: root.auto-memory;
+                                    window-mode: root.window-mode;
+                                    language: root.language;
+                                    after-launch: root.after-launch;
+                                    adjust(choice, delta) => { root.adjust(choice, delta); }
+                                    open-home => { root.reveal(Place.home, @tr("ВЕРСИЯ ЕЩЁ НЕ УСТАНОВЛЕНА")); }
                                     repair => { root.repair(); }
                                     open-logs => { root.reveal(Place.logs, @tr("ЛОГОВ ПОКА НЕТ")); }
                                     open-screenshots => { root.reveal(Place.screenshots, @tr("СКРИНШОТОВ ПОКА НЕТ")); }

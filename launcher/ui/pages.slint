@@ -11,6 +11,7 @@ export component PlayPanel inherits VerticalLayout {
     in property <bool> blink;
     in property <bool> busy;
     in property <bool> installed;
+    in property <bool> playing;
     callback join-edited(string);
     callback join();
     callback launch();
@@ -159,8 +160,9 @@ export component PlayPanel inherits VerticalLayout {
     Rectangle { height: Theme.gap; }
 
     LaunchButton {
-        label: root.busy ? @tr("ОТМЕНИТЬ") : root.installed ? @tr("ЗАПУСК") : @tr("УСТАНОВИТЬ");
-        hint: root.busy ? "ESC" : "ENTER";
+        label: root.busy ? @tr("ОТМЕНИТЬ") : root.playing ? @tr("ИГРА ЗАПУЩЕНА") : root.installed ? @tr("ЗАПУСК") : @tr("УСТАНОВИТЬ");
+        hint: root.busy ? "ESC" : root.playing ? "" : "ENTER";
+        enabled: !root.playing;
         clicked => {
             if root.busy {
                 root.cancel();
@@ -333,26 +335,63 @@ component Group inherits VerticalLayout {
     @children
 }
 
+export enum Choice { memory, window, language, after-launch }
+
 export component SettingsPanel inherits GridLayout {
     in property <string> version;
+    in property <string> build;
+    in property <int> memory;
+    in property <int> auto-memory;
+    in property <int> window-mode;
+    in property <int> language;
+    in property <int> after-launch;
+    callback adjust(Choice, int);
     callback repair();
+    callback open-home();
     callback open-logs();
     callback open-screenshots();
+
+    property <[string]> windows: [@tr("ПОЛНЫЙ ЭКРАН"), "1280 × 720", "1600 × 900", "1920 × 1080"];
+    property <[string]> languages: ["РУССКИЙ", "ENGLISH"];
+    property <[string]> afterwards: [@tr("СКРЫТЬ ЛАУНЧЕР"), @tr("ОСТАВИТЬ ОТКРЫТЫМ"), @tr("ЗАКРЫТЬ ЛАУНЧЕР")];
+    property <length> column: (root.width - Theme.gap) / 2;
 
     spacing-horizontal: Theme.gap;
     spacing-vertical: Theme.gap;
 
     Row {
         Group {
+            width: root.column;
             title: @tr("ИГРА");
-            Setting { label: @tr("ПАМЯТЬ"); value: @tr("АВТО"); selector: true; }
-            Setting { label: @tr("ОКНО"); value: @tr("ПОЛНЫЙ ЭКРАН"); selector: true; }
-            Setting { label: @tr("ЯЗЫК"); value: @tr("РУССКИЙ"); selector: true; }
-            Setting { label: @tr("ПРИ ЗАПУСКЕ"); value: @tr("СКРЫТЬ"); selector: true; }
+            Setting {
+                label: @tr("ПАМЯТЬ");
+                value: root.memory == 0 ? @tr("АВТО · {} ГБ", root.auto-memory) : @tr("{} ГБ", root.memory);
+                selector: true;
+                stepped(delta) => { root.adjust(Choice.memory, delta); }
+            }
+            Setting {
+                label: @tr("ОКНО");
+                value: root.windows[root.window-mode];
+                selector: true;
+                stepped(delta) => { root.adjust(Choice.window, delta); }
+            }
+            Setting {
+                label: @tr("ЯЗЫК");
+                value: root.languages[root.language];
+                selector: true;
+                stepped(delta) => { root.adjust(Choice.language, delta); }
+            }
+            Setting {
+                label: @tr("ПОСЛЕ ЗАПУСКА");
+                value: root.afterwards[root.after-launch];
+                selector: true;
+                stepped(delta) => { root.adjust(Choice.after-launch, delta); }
+            }
         }
         Group {
+            width: root.column;
             title: @tr("ФАЙЛЫ");
-            Setting { label: @tr("ПАПКА"); value: "%APPDATA%\\SUBSTRATUM"; }
+            Setting { label: @tr("ПАПКА ИГРЫ"); value: "%APPDATA%\\SUBSTRATUM"; action: true; activated => { root.open-home(); } }
             Setting { label: @tr("ПРОВЕРИТЬ И ПОЧИНИТЬ"); action: true; activated => { root.repair(); } }
             Setting { label: @tr("ОТКРЫТЬ ЛОГИ"); action: true; activated => { root.open-logs(); } }
             Setting { label: @tr("ОТКРЫТЬ СКРИНШОТЫ"); action: true; activated => { root.open-screenshots(); } }
@@ -360,14 +399,18 @@ export component SettingsPanel inherits GridLayout {
     }
     Row {
         Group {
-            title: @tr("СИСТЕМА");
-            Setting { label: "LAUNCHER"; value: "v" + root.version; }
+            width: root.column;
+            title: @tr("О ПРОГРАММЕ");
+            Setting { label: @tr("ЛАУНЧЕР"); value: "v" + root.version; }
+            Setting { label: @tr("ВЕРСИЯ ИГРЫ"); value: root.build == "" ? "—" : root.build.to-uppercase(); }
             Setting { label: "MINECRAFT"; value: "1.21.1"; }
         }
         Group {
+            width: root.column;
             title: " ";
-            Setting { label: "UI"; value: "SLINT 1.18"; }
-            Setting { label: "LICENSE"; value: "MIT · FONTS OFL"; }
+            Setting { label: @tr("АВТОР"); value: "THEWHISH"; }
+            Setting { label: @tr("ЛИЦЕНЗИЯ"); value: @tr("MIT · ШРИФТЫ OFL"); }
+            Setting { label: @tr("ИНТЕРФЕЙС"); value: "MADE WITH SLINT"; }
         }
     }
 }

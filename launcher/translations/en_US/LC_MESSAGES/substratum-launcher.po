@@ -1,0 +1,211 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: en_US\n"
+
+msgid "MIT · ШРИФТЫ OFL"
+msgstr "MIT · FONTS OFL"
+
+msgid "{} ГБ"
+msgstr "{} GB"
+
+msgid "{}.{} МБ/С"
+msgstr "{}.{} MB/S"
+
+msgid "АВТО · {} ГБ"
+msgstr "AUTO · {} GB"
+
+msgid "АВТОР"
+msgstr "AUTHOR"
+
+msgid "ВЕРСИЯ {}"
+msgstr "VERSION {}"
+
+msgid "ВЕРСИЯ ЕЩЁ НЕ УСТАНОВЛЕНА"
+msgstr "VERSION IS NOT INSTALLED YET"
+
+msgid "ВЕРСИЯ ИГРЫ"
+msgstr "GAME VERSION"
+
+msgid "ВЕРСИЯ НЕ УСТАНОВЛЕНА"
+msgstr "VERSION NOT INSTALLED"
+
+msgid "ВЕРСИЯ УСТАНОВЛЕНА"
+msgstr "VERSION INSTALLED"
+
+msgid "ВОЙТИ ПО КОДУ"
+msgstr "JOIN BY CODE"
+
+msgid "ВОЙТИ"
+msgstr "JOIN"
+
+msgid "ВЫБРАТЬ PNG"
+msgstr "CHOOSE PNG"
+
+msgid "ВЫХОД"
+msgstr "EXIT"
+
+msgid "ЗАГРУЗКА {}%"
+msgstr "DOWNLOADING {}%"
+
+msgid "ЗАГРУЗКА ОТМЕНЕНА"
+msgstr "DOWNLOAD CANCELLED"
+
+msgid "ЗАГРУЗКА"
+msgstr "LOADING"
+
+msgid "ЗАКРЫТЬ ЛАУНЧЕР"
+msgstr "CLOSE LAUNCHER"
+
+msgid "ЗАПУСК"
+msgstr "LAUNCH"
+
+msgid "ИГРА ВЫЛЕТЕЛА"
+msgstr "GAME CRASHED"
+
+msgid "ИГРА ЗАПУЩЕНА"
+msgstr "GAME RUNNING"
+
+msgid "ИГРА"
+msgstr "GAME"
+
+msgid "ИГРАТЬ"
+msgstr "PLAY"
+
+msgid "ИНТЕРФЕЙС"
+msgstr "INTERFACE"
+
+msgid "КОД КОМАНДЫ"
+msgstr "TEAM CODE"
+
+msgid "КОМАНДА"
+msgstr "TEAM"
+
+msgid "КОПИРОВАТЬ"
+msgstr "COPY"
+
+msgid "ЛАУНЧЕР"
+msgstr "LAUNCHER"
+
+msgid "ЛИЦЕНЗИЯ"
+msgstr "LICENSE"
+
+msgid "ЛОГОВ ПОКА НЕТ"
+msgstr "NO LOGS YET"
+
+msgid "НАСТРОЙКИ"
+msgstr "SETTINGS"
+
+msgid "НЕ УДАЛОСЬ ЗАПИСАТЬ ФАЙЛЫ, ПРОВЕРЬТЕ МЕСТО НА ДИСКЕ"
+msgstr "COULD NOT WRITE FILES, CHECK DISK SPACE"
+
+msgid "НЕ УДАЛОСЬ ЗАПУСТИТЬ ИГРУ, ПРОВЕРЬТЕ ВЕРСИЮ В НАСТРОЙКАХ"
+msgstr "COULD NOT START THE GAME, REPAIR IT IN SETTINGS"
+
+msgid "НЕ УДАЛОСЬ СОХРАНИТЬ СКИН"
+msgstr "COULD NOT SAVE THE SKIN"
+
+msgid "НЕ УДАЛОСЬ УСТАНОВИТЬ ВЕРСИЮ"
+msgstr "COULD NOT INSTALL THE VERSION"
+
+msgid "НЕТ СВЯЗИ С СЕРВЕРОМ, ПОПРОБУЙТЕ ПОЗЖЕ"
+msgstr "NO CONNECTION TO THE SERVER, TRY LATER"
+
+msgid "НИК"
+msgstr "NICKNAME"
+
+msgid "НИК: 3–16 ЛАТИНСКИХ БУКВ, ЦИФР ИЛИ _"
+msgstr "NICKNAME: 3–16 LATIN LETTERS, DIGITS OR _"
+
+msgid "НУЖЕН PNG 64×64 ДО 256 КБ"
+msgstr "NEEDS A 64×64 PNG UP TO 256 KB"
+
+msgid "О ПРОГРАММЕ"
+msgstr "ABOUT"
+
+msgid "ОКНО"
+msgstr "WINDOW"
+
+msgid "ОКТ. 08 1996   AM 03:12"
+msgstr "OCT. 08 1996   AM 03:12"
+
+msgid "ОСТАВИТЬ ОТКРЫТЫМ"
+msgstr "KEEP OPEN"
+
+msgid "ОТКРЫТЬ ЛОГ"
+msgstr "OPEN LOG"
+
+msgid "ОТКРЫТЬ ЛОГИ"
+msgstr "OPEN LOGS"
+
+msgid "ОТКРЫТЬ СКРИНШОТЫ"
+msgstr "OPEN SCREENSHOTS"
+
+msgid "ОТМЕНИТЬ"
+msgstr "CANCEL"
+
+msgid "ПАМЯТЬ"
+msgstr "MEMORY"
+
+msgid "ПАПКА ИГРЫ"
+msgstr "GAME FOLDER"
+
+msgid "ПЕРЕД"
+msgstr "FRONT"
+
+msgid "ПЕРЕМОТКА"
+msgstr "REWIND"
+
+msgid "ПОДГОТОВКА"
+msgstr "PREPARING"
+
+msgid "ПОЛНЫЙ ЭКРАН"
+msgstr "FULLSCREEN"
+
+msgid "ПОСЛЕ ЗАПУСКА"
+msgstr "AFTER LAUNCH"
+
+msgid "ПРОВЕРИТЬ И ПОЧИНИТЬ"
+msgstr "VERIFY AND REPAIR"
+
+msgid "ПРОВЕРКА {}%"
+msgstr "VERIFYING {}%"
+
+msgid "ПРОФИЛЬ"
+msgstr "PROFILE"
+
+msgid "СВОБОДНО"
+msgstr "EMPTY"
+
+msgid "СВЯЗЬ С КОМАНДОЙ ПОКА НЕДОСТУПНА"
+msgstr "TEAM CONNECTION IS NOT AVAILABLE YET"
+
+msgid "СКИН"
+msgstr "SKIN"
+
+msgid "СКОПИРОВАНО"
+msgstr "COPIED"
+
+msgid "СКРИНШОТОВ ПОКА НЕТ"
+msgstr "NO SCREENSHOTS YET"
+
+msgid "СКРЫТЬ ЛАУНЧЕР"
+msgstr "HIDE LAUNCHER"
+
+msgid "СПИНА"
+msgstr "BACK"
+
+msgid "УСТАНОВИТЬ"
+msgstr "INSTALL"
+
+msgid "ФАЙЛ ПРИШЁЛ ПОВРЕЖДЁННЫМ, ПОВТОРИТЕ ЗАГРУЗКУ"
+msgstr "A FILE ARRIVED DAMAGED, TRY AGAIN"
+
+msgid "ФАЙЛЫ"
+msgstr "FILES"
+
+msgid "ХОСТ"
+msgstr "HOST"
+
+msgid "ЯЗЫК"
+msgstr "LANGUAGE"

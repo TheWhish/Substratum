@@ -5,7 +5,10 @@ mod fetch;
 mod install;
 mod launch;
 mod profile;
+mod settings;
 mod skin;
+#[cfg(test)]
+mod translations;
 mod vhs;
 
 use std::cell::RefCell;
@@ -19,6 +22,7 @@ use std::time::{Duration, Instant};
 
 use fetch::{Error, Progress};
 use profile::Profile;
+use settings::{AfterLaunch, Language, Settings, Window};
 use skin::{PRESETS, Skin};
 use slint::{
     CloseRequestResponse, ComponentHandle, ModelRc, PhysicalPosition, Timer, TimerMode, VecModel,
@@ -28,10 +32,16 @@ use slint::{
 slint::include_modules!();
 
 const SPEED_WINDOW: Duration = Duration::from_secs(1);
+const FALLBACK_MEMORY: u32 = 4;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let home: Rc<Path> = install::home().ok_or("APPDATA is not set")?.into();
     let profile = Rc::new(RefCell::new(load_profile(&home)?));
+    let settings = Rc::new(RefCell::new(load_settings(&home)));
+    let total = settings::total_memory().unwrap_or_else(|| {
+        eprintln!("failed to read the installed memory, assuming {FALLBACK_MEMORY} GB");
+        FALLBACK_MEMORY
+    });
 
     let app = AppWindow::new()?;
     app.set_version(env!("CARGO_PKG_VERSION").into());
@@ -48,6 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.set_join_cells(code::cells(""));
 
     bind_profile(&app, &home, &profile);
+    bind_settings(&app, &home, &settings, total);
     let job: Rc<RefCell<Option<Job>>> = Rc::default();
 
     let weak = app.as_weak();
@@ -66,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let weak = app.as_weak();
-    let (root, player) = (home.clone(), profile.clone());
+    let (root, player, options) = (home.clone(), profile.clone(), settings.clone());
     app.on_play(move || {
         let Some(app) = weak.upgrade() else {
             return Launch::Failed;
@@ -75,11 +86,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !profile::valid_nick(&profile.nick) {
             return Launch::Nick;
         }
-        match launch::start(&root, &profile) {
+        let options = *options.borrow();
+        match launch::start(&root, &profile, &options, options.heap(total)) {
             Ok(game) => {
-                if let Err(error) = app.hide() {
-                    eprintln!("failed to hide the launcher: {error}");
+                match options.after_launch {
+                    AfterLaunch::Close => {
+                        quit();
+                        return Launch::Started;
+                    }
+                    AfterLaunch::Hide => {
+                        if let Err(error) = app.hide() {
+                            eprintln!("failed to hide the launcher: {error}");
+                        }
+                    }
+                    AfterLaunch::Keep => {}
                 }
+                app.set_playing(true);
                 watch(game, app.as_weak());
                 Launch::Started
             }
@@ -94,6 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.on_open(move |place| {
         let logs = launch::instance(&root).join("logs");
         let path = match place {
+            Place::Home => root.to_path_buf(),
             Place::Logs => logs,
             Place::Screenshots => launch::instance(&root).join("screenshots"),
             Place::LatestLog => logs.join("latest.log"),
@@ -236,6 +259,70 @@ fn bind_profile(app: &AppWindow, home: &Rc<Path>, profile: &Rc<RefCell<Profile>>
     });
 }
 
+fn load_settings(home: &Path) -> Settings {
+    Settings::load(home).unwrap_or_else(|error| {
+        eprintln!("settings are unreadable, using defaults: {error}");
+        Settings::default()
+    })
+}
+
+fn bind_settings(app: &AppWindow, home: &Rc<Path>, settings: &Rc<RefCell<Settings>>, total: u32) {
+    show_settings(app, &settings.borrow(), total);
+    select_language(settings.borrow().language);
+
+    let weak = app.as_weak();
+    let (root, options) = (home.clone(), settings.clone());
+    app.on_adjust(move |choice, delta| {
+        let Some(app) = weak.upgrade() else { return };
+        let mut settings = options.borrow_mut();
+        match choice {
+            Choice::Memory => settings.step_memory(total, delta),
+            Choice::Window => {
+                settings.window = settings::step(&Window::ALL, settings.window, delta)
+            }
+            Choice::Language => {
+                settings.language = settings::step(&Language::ALL, settings.language, delta);
+                select_language(settings.language);
+            }
+            Choice::AfterLaunch => {
+                settings.after_launch =
+                    settings::step(&AfterLaunch::ALL, settings.after_launch, delta)
+            }
+        }
+        if let Err(error) = settings.save(&root) {
+            eprintln!("failed to save the settings: {error}");
+        }
+        show_settings(&app, &settings, total);
+    });
+}
+
+fn show_settings(app: &AppWindow, settings: &Settings, total: u32) {
+    let index = |position: Option<usize>| position.unwrap_or(0) as i32;
+    app.set_memory(settings.memory as i32);
+    app.set_auto_memory(settings::auto_memory(total) as i32);
+    app.set_window_mode(index(
+        Window::ALL
+            .iter()
+            .position(|window| *window == settings.window),
+    ));
+    app.set_language(index(
+        Language::ALL
+            .iter()
+            .position(|language| *language == settings.language),
+    ));
+    app.set_after_launch(index(
+        AfterLaunch::ALL
+            .iter()
+            .position(|after| *after == settings.after_launch),
+    ));
+}
+
+fn select_language(language: Language) {
+    if let Err(error) = slint::select_bundled_translation(language.bundle()) {
+        eprintln!("failed to switch the language: {error}");
+    }
+}
+
 fn persist(home: &Path, profile: &Profile) {
     if let Err(error) = profile.save(home) {
         eprintln!("failed to save the profile: {error}");
@@ -293,6 +380,7 @@ fn watch(mut game: Child, weak: Weak<AppWindow>) {
         let crashed = !game.wait().is_ok_and(|status| status.success());
         let returned = slint::invoke_from_event_loop(move || {
             let Some(app) = weak.upgrade() else { return };
+            app.set_playing(false);
             app.set_crashed(crashed);
             if let Err(error) = app.show() {
                 eprintln!("failed to show the launcher: {error}");

@@ -27,3 +27,4 @@ sha2 = "0.11.1"
 slint = { version = "1.18.1", features = ["raw-window-handle-06"] }
 toml = "1.2.1"
 ureq = "3.5.1"
+windows-sys = { version = "0.61", features = ["Win32_System_SystemInformation", "Win32_Globalization"] }

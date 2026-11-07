@@ -122,8 +122,9 @@ export component SlotCard inherits Rectangle {
     in property <string> number;
     in property <string> nick;
     in property <bool> host;
+    in property <image> face;
 
-    property <bool> taken: root.nick != "";
+    property <bool> taken: root.nick != "" || root.host;
 
     min-height: 124px;
     border-width: 1px;
@@ -146,16 +147,11 @@ export component SlotCard inherits Rectangle {
         if root.taken: HorizontalLayout {
             spacing: 12px;
 
-            Rectangle {
+            Image {
                 width: 56px;
                 height: 56px;
-                background: #6b4f33;
-
-                Rectangle {
-                    y: parent.height - self.height;
-                    height: 20px;
-                    background: #3d2c1c;
-                }
+                source: root.face;
+                image-rendering: pixelated;
             }
             Text {
                 text: root.nick;
@@ -219,6 +215,9 @@ export component Setting inherits Rectangle {
     in property <bool> selector;
     in property <bool> action;
     callback activated();
+    callback stepped(int);
+
+    property <bool> live: root.action || root.selector;
 
     height: Theme.row;
 
@@ -226,6 +225,25 @@ export component Setting inherits Rectangle {
         y: parent.height - 1px;
         height: 1px;
         background: Theme.line-faint;
+    }
+
+    area := TouchArea {
+        enabled: root.live;
+        mouse-cursor: root.live ? pointer : default;
+        clicked => {
+            if root.selector {
+                root.stepped(1);
+            } else {
+                root.activated();
+            }
+        }
+        scroll-event(event) => {
+            if !root.selector || event.delta-y == 0 {
+                return reject;
+            }
+            root.stepped(event.delta-y > 0 ? -1 : 1);
+            return accept;
+        }
     }
 
     HorizontalLayout {
@@ -243,9 +261,19 @@ export component Setting inherits Rectangle {
             spacing: 12px;
             horizontal-stretch: 0;
 
-            if root.selector: VerticalLayout {
-                alignment: center;
-                Marker { left: true; ink: Theme.text-mute; }
+            if root.selector: Rectangle {
+                width: 12px;
+
+                Marker {
+                    x: parent.width - self.width;
+                    y: (parent.height - self.height) / 2;
+                    left: true;
+                    ink: back-area.has-hover ? Theme.text : Theme.text-mute;
+                }
+                back-area := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.stepped(-1); }
+                }
             }
             if root.value != "": Text {
                 text: root.value;
@@ -253,30 +281,25 @@ export component Setting inherits Rectangle {
                 font-size: Theme.body-size;
                 vertical-alignment: center;
             }
-            if root.selector || root.action: VerticalLayout {
+            if root.live: VerticalLayout {
                 alignment: center;
-                Marker { ink: root.action && area.has-hover ? Theme.text : Theme.text-mute; }
+                Marker { ink: area.has-hover ? Theme.text : Theme.text-mute; }
             }
         }
-    }
-
-    area := TouchArea {
-        enabled: root.action;
-        mouse-cursor: root.action ? pointer : default;
-        clicked => { root.activated(); }
     }
 }
 
 export component LaunchButton inherits Rectangle {
     in property <string> label;
     in property <string> hint;
+    in property <bool> enabled: true;
     callback clicked();
 
-    property <bool> hot: area.has-hover;
+    property <bool> hot: area.has-hover && root.enabled;
 
     height: Theme.launch;
     border-width: 1px;
-    border-color: Theme.text;
+    border-color: root.enabled ? Theme.text : Theme.line;
     background: root.hot ? Theme.text : transparent;
     animate background { duration: Theme.hover; easing: ease-out; }
 
@@ -287,11 +310,11 @@ export component LaunchButton inherits Rectangle {
 
         VerticalLayout {
             alignment: center;
-            Marker { size: 7; ink: root.hot ? Theme.bg : Theme.text; }
+            Marker { size: 7; ink: root.hot ? Theme.bg : root.enabled ? Theme.text : Theme.text-mute; }
         }
         Text {
             text: root.label;
-            color: root.hot ? Theme.bg : Theme.text;
+            color: root.hot ? Theme.bg : root.enabled ? Theme.text : Theme.text-mute;
             font-size: Theme.menu-size;
             letter-spacing: 2px;
             vertical-alignment: center;
@@ -306,7 +329,8 @@ export component LaunchButton inherits Rectangle {
     }
 
     area := TouchArea {
-        mouse-cursor: pointer;
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
         clicked => { root.clicked(); }
     }
 }
