@@ -6,8 +6,8 @@
     {
       "file": "substratum-0.1.0-alpha.jar",
       "url": "https://github.com/TheWhish/Substratum/releases/download/build-0.1.0-alpha/substratum-0.1.0-alpha.jar",
-      "size": 4189085,
-      "sha256": "e414d12afe73899d47535bc36867225cc0eb1455aebe922be1339b45f9642e89"
+      "size": 4189096,
+      "sha256": "229bb80242e9749408ed3ab4f6fe1a2aee4d106e7a07fbee03da5d3dff563b16"
     },
     {
       "file": "fabric-api-0.116.15+1.21.1.jar",
