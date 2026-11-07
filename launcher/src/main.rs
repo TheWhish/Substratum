@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod code;
+mod direct;
 mod fetch;
 mod install;
 mod launch;
@@ -256,6 +257,7 @@ fn start_team(app: &AppWindow, profile: &Profile) -> Result<team::Handle, Box<dy
             me: String::new(),
             team: None,
             refused: None,
+            direct: None,
         },
     );
     Ok(handle)
@@ -286,6 +288,11 @@ fn team_profile(app: &AppWindow, profile: &Profile) -> team::Profile {
 fn show_team(app: &AppWindow, update: team::Update) {
     let code = update.team.as_ref().map_or("", |team| team.code.as_str());
     app.set_team_online(update.online);
+    app.set_team_route(match update.direct {
+        Some(true) => Route::Direct,
+        Some(false) => Route::Relay,
+        None => Route::None,
+    });
     app.set_team_code(code.into());
     app.set_team_cells(code::cells(code));
     let slots = match &update.team {

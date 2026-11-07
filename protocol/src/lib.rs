@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -10,6 +12,8 @@ pub const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 pub const NICK_MIN: usize = 3;
 pub const NICK_MAX: usize = 16;
 pub const RELAY_CHUNK: usize = 16 * 1024;
+pub const BEACON_PORT: u16 = 7878;
+pub const BEACON_LENGTH: usize = 16;
 const SKIN_MAX: usize = 16;
 const BUILD_MAX: usize = 32;
 const HELLO_CONTEXT: &str = "substratum-hello:";
@@ -96,16 +100,33 @@ pub enum ToServer {
     Start,
     Opened,
     Ended,
+    Punch,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ToClient {
-    Challenge { nonce: String },
-    Welcome { uuid: String, token: String },
-    Team { team: Team },
-    Refused { reason: Refusal },
-    Incoming { stream: u64 },
+    Challenge {
+        nonce: String,
+    },
+    Welcome {
+        uuid: String,
+        token: String,
+        beacon: String,
+    },
+    Team {
+        team: Team,
+    },
+    Refused {
+        reason: Refusal,
+    },
+    Incoming {
+        stream: u64,
+    },
+    Punch {
+        peer: String,
+        address: SocketAddr,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -227,8 +248,14 @@ mod tests {
         );
         assert_eq!(serde_json::from_str::<ToServer>(&text).unwrap(), hello);
         let text = serde_json::to_string(&ToServer::Profile(profile.clone())).unwrap();
-        assert_eq!(text, r#"{"type":"profile","nick":"Alpha","skin":"red","build":"1"}"#);
-        assert_eq!(serde_json::from_str::<ToServer>(&text).unwrap(), ToServer::Profile(profile));
+        assert_eq!(
+            text,
+            r#"{"type":"profile","nick":"Alpha","skin":"red","build":"1"}"#
+        );
+        assert_eq!(
+            serde_json::from_str::<ToServer>(&text).unwrap(),
+            ToServer::Profile(profile)
+        );
     }
 
     #[test]

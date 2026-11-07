@@ -1,26 +1,34 @@
 use std::error::Error;
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use ed25519_dalek::{Signer, SigningKey};
 use futures_util::{SinkExt, StreamExt};
+use quinn::{Connection, Endpoint};
 use serde::{Deserialize, Serialize};
 pub use substratum_protocol::Profile;
 use substratum_protocol::{
-    CONTROL_PATH, Presence, RELAY_CHUNK, RELAY_PATH, Refusal, Relay, Team, ToClient, ToServer,
-    hello_message, hex,
+    BEACON_PORT, CONTROL_PATH, Presence, RELAY_CHUNK, RELAY_PATH, Refusal, Relay, Team, ToClient,
+    ToServer, hello_message, hex, unhex,
 };
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::http::Uri;
+
+use crate::direct::{self, Direct};
 
 const BACKEND: &str = "wss://substratum.thewhish.xyz";
 const RETRY_FIRST: Duration = Duration::from_secs(1);
 const RETRY_MAX: Duration = Duration::from_secs(30);
 const IDLE: Duration = Duration::from_secs(60);
 const LINE_LIMIT: u64 = 64 * 1024;
+const BEACON_EVERY: Duration = Duration::from_secs(15);
+const ROUTE_WAIT: Duration = Duration::from_secs(5);
 
 type Failure = Box<dyn Error + Send + Sync>;
 
@@ -36,6 +44,7 @@ pub struct Update {
     pub me: String,
     pub team: Option<Team>,
     pub refused: Option<Refusal>,
+    pub direct: Option<bool>,
 }
 
 #[derive(Clone)]
@@ -80,6 +89,21 @@ enum Event {
     GameConnected(UnboundedSender<String>),
     Game(FromGame),
     GameGone,
+    Peer(Connection, String),
+    Routed,
+}
+
+#[derive(Clone)]
+enum Route {
+    Pending,
+    Direct(Connection),
+    Relay,
+}
+
+struct Door {
+    port: u16,
+    task: JoinHandle<()>,
+    route: Arc<watch::Sender<Route>>,
 }
 
 pub fn start(
@@ -107,8 +131,20 @@ pub fn start(
                     }
                     Err(error) => eprintln!("game link is unavailable: {error}"),
                 }
+                let direct = match direct::open(&key) {
+                    Ok(direct) => {
+                        tokio::spawn(accept_direct(direct.endpoint.clone(), events.clone()));
+                        Some(direct)
+                    }
+                    Err(error) => {
+                        eprintln!("direct connections are unavailable: {error}");
+                        None
+                    }
+                };
                 tokio::spawn(control(url.clone(), key, profile.clone(), events.clone()));
-                Core::new(url, profile, Box::new(notify)).run(inbox).await;
+                Core::new(url, profile, Box::new(notify), events, direct)
+                    .run(inbox)
+                    .await;
             })
         })?;
     Ok(Handle {
@@ -121,6 +157,10 @@ struct Core {
     url: String,
     profile: Arc<Mutex<Profile>>,
     notify: Box<dyn Fn(Update) + Send>,
+    events: UnboundedSender<Event>,
+    direct: Option<Direct>,
+    beacon: Option<JoinHandle<()>>,
+    peers: Vec<Connection>,
     server: Option<UnboundedSender<ToServer>>,
     game: Option<UnboundedSender<String>>,
     me: String,
@@ -128,15 +168,25 @@ struct Core {
     team: Option<Team>,
     presence: Presence,
     world: Option<u16>,
-    door: Option<(u16, JoinHandle<()>)>,
+    door: Option<Door>,
 }
 
 impl Core {
-    fn new(url: String, profile: Arc<Mutex<Profile>>, notify: Box<dyn Fn(Update) + Send>) -> Core {
+    fn new(
+        url: String,
+        profile: Arc<Mutex<Profile>>,
+        notify: Box<dyn Fn(Update) + Send>,
+        events: UnboundedSender<Event>,
+        direct: Option<Direct>,
+    ) -> Core {
         Core {
             url,
             profile,
             notify,
+            events,
+            direct,
+            beacon: None,
+            peers: Vec::new(),
             server: None,
             game: None,
             me: String::new(),
@@ -170,14 +220,22 @@ impl Core {
                 self.server = Some(server);
             }
             Event::Disconnected => {
+                if let Some(beacon) = self.beacon.take() {
+                    beacon.abort();
+                }
                 self.server = None;
                 self.team = None;
                 self.publish(None);
             }
             Event::Server(ToClient::Challenge { .. }) => {}
-            Event::Server(ToClient::Welcome { uuid, token }) => {
+            Event::Server(ToClient::Welcome {
+                uuid,
+                token,
+                beacon,
+            }) => {
                 self.me = uuid;
                 self.token = token;
+                self.signal(&beacon);
             }
             Event::Server(ToClient::Team { team }) => {
                 self.team = Some(team);
@@ -188,6 +246,9 @@ impl Core {
                 self.publish(Some(reason));
             }
             Event::Server(ToClient::Incoming { stream }) => self.accept(stream),
+            Event::Server(ToClient::Punch { peer, address }) => self.punch(&peer, address),
+            Event::Peer(connection, peer) => self.admit(connection, &peer),
+            Event::Routed => self.publish(None),
             Event::GameConnected(game) => {
                 self.game = Some(game);
                 self.publish(None);
@@ -239,16 +300,23 @@ impl Core {
 
     fn publish(&mut self, refused: Option<Refusal>) {
         self.reconcile_door();
+        self.reconcile_peers();
+        let direct = self.door.as_ref().and_then(|door| match &*door.route.borrow() {
+            Route::Pending => None,
+            Route::Direct(_) => Some(true),
+            Route::Relay => Some(false),
+        });
         (self.notify)(Update {
             online: self.server.is_some(),
             me: self.me.clone(),
             team: self.team.clone(),
             refused,
+            direct,
         });
         let state = ToGame::State {
             me: &self.me,
             team: self.team.as_ref(),
-            door: self.door.as_ref().map(|(port, _)| *port),
+            door: self.door.as_ref().map(|door| door.port),
         };
         self.send_game(&state);
     }
@@ -274,18 +342,93 @@ impl Core {
                 }) {
                 Ok(listener) => {
                     let port = listener.local_addr().map(|address| address.port()).unwrap_or(0);
-                    let task = tokio::spawn(serve_door(listener, self.url.clone(), self.token.clone()));
-                    self.door = Some((port, task));
+                    let initial = match self.direct {
+                        Some(_) => Route::Pending,
+                        None => Route::Relay,
+                    };
+                    let route = Arc::new(watch::channel(initial).0);
+                    let receiver = route.subscribe();
+                    let door = serve_door(listener, self.url.clone(), self.token.clone(), receiver);
+                    let task = tokio::spawn(door);
+                    if self.direct.is_some() {
+                        tokio::spawn(settle(route.clone(), self.events.clone()));
+                        self.tell(ToServer::Punch);
+                    }
+                    self.door = Some(Door { port, task, route });
                 }
                 Err(error) => eprintln!("failed to open the door to the host: {error}"),
             },
             (false, Some(_)) => {
-                if let Some((_, task)) = self.door.take() {
-                    task.abort();
+                if let Some(door) = self.door.take() {
+                    door.task.abort();
                 }
             }
             _ => {}
         }
+    }
+
+    fn reconcile_peers(&mut self) {
+        let hosting = self.world.is_some()
+            && self.team.as_ref().is_some_and(|team| {
+                team.host == self.me && team.session.as_ref().is_some_and(|session| session.open)
+            });
+        if !hosting {
+            for peer in self.peers.drain(..) {
+                peer.close(0u32.into(), b"the game is over");
+            }
+        }
+    }
+
+    fn signal(&mut self, beacon: &str) {
+        if let Some(previous) = self.beacon.take() {
+            previous.abort();
+        }
+        let (Some(direct), Some(beacon)) = (&self.direct, unhex(beacon)) else {
+            return;
+        };
+        let announcing = announce(direct.socket.clone(), self.url.clone(), beacon);
+        self.beacon = Some(tokio::spawn(announcing));
+    }
+
+    fn punch(&self, peer: &str, address: SocketAddr) {
+        let (Some(direct), Some(team)) = (&self.direct, &self.team) else {
+            return;
+        };
+        if team.host == self.me && self.hosting_session() && team.takes_part(peer) {
+            tokio::spawn(direct::punch(direct.socket.clone(), address));
+            return;
+        }
+        let Some(door) = &self.door else {
+            return;
+        };
+        if team.host != peer {
+            return;
+        }
+        tokio::spawn(direct::punch(direct.socket.clone(), address));
+        tokio::spawn(reach(
+            direct.endpoint.clone(),
+            address,
+            peer.to_owned(),
+            door.route.clone(),
+            self.events.clone(),
+        ));
+    }
+
+    fn admit(&mut self, connection: Connection, peer: &str) {
+        let world = self.world.filter(|_| {
+            peer != self.me
+                && self.team.as_ref().is_some_and(|team| {
+                    team.host == self.me
+                        && team.takes_part(peer)
+                        && team.session.as_ref().is_some_and(|session| session.open)
+                })
+        });
+        let Some(world) = world else {
+            connection.close(0u32.into(), b"not a participant");
+            return;
+        };
+        self.peers.push(connection.clone());
+        tokio::spawn(direct::serve(connection, world));
     }
 
     fn accept(&self, stream: u64) {
@@ -432,18 +575,102 @@ async fn serve_game(listener: TcpListener, events: UnboundedSender<Event>) {
     }
 }
 
-async fn serve_door(listener: TcpListener, url: String, token: String) {
+async fn serve_door(
+    listener: TcpListener,
+    url: String,
+    token: String,
+    route: watch::Receiver<Route>,
+) {
     loop {
         let Ok((local, _)) = listener.accept().await else {
             continue;
         };
-        let (url, token) = (url.clone(), token.clone());
+        let (url, token, mut route) = (url.clone(), token.clone(), route.clone());
         tokio::spawn(async move {
+            let chosen = route
+                .wait_for(|route| !matches!(route, Route::Pending))
+                .await
+                .map(|route| route.clone());
+            if let Ok(Route::Direct(connection)) = chosen
+                && let Ok((send, receive)) = connection.open_bi().await
+            {
+                if let Err(error) = direct::bridge(send, receive, local).await {
+                    eprintln!("direct stream to the host failed: {error}");
+                }
+                return;
+            }
             if let Err(error) = relay(&url, Relay::Dial { token }, local).await {
                 eprintln!("relay to the host failed: {error}");
             }
         });
     }
+}
+
+async fn settle(route: Arc<watch::Sender<Route>>, events: UnboundedSender<Event>) {
+    tokio::time::sleep(ROUTE_WAIT).await;
+    let fell_back = route.send_if_modified(|route| {
+        let pending = matches!(route, Route::Pending);
+        if pending {
+            *route = Route::Relay;
+        }
+        pending
+    });
+    if fell_back {
+        let _ = events.send(Event::Routed);
+    }
+}
+
+async fn reach(
+    endpoint: Endpoint,
+    address: SocketAddr,
+    host: String,
+    route: Arc<watch::Sender<Route>>,
+    events: UnboundedSender<Event>,
+) {
+    let reached = direct::connect(&endpoint, address, &host).await;
+    route.send_replace(reached.map_or(Route::Relay, Route::Direct));
+    let _ = events.send(Event::Routed);
+}
+
+async fn accept_direct(endpoint: Endpoint, events: UnboundedSender<Event>) {
+    while let Some(incoming) = endpoint.accept().await {
+        let events = events.clone();
+        tokio::spawn(async move {
+            let connection = match incoming.await {
+                Ok(connection) => connection,
+                Err(error) => {
+                    eprintln!("incoming direct connection failed: {error}");
+                    return;
+                }
+            };
+            match direct::peer(&connection) {
+                Some(peer) => {
+                    let _ = events.send(Event::Peer(connection, peer));
+                }
+                None => connection.close(0u32.into(), b"unknown peer"),
+            }
+        });
+    }
+}
+
+async fn announce(socket: Arc<UdpSocket>, url: String, beacon: Vec<u8>) {
+    loop {
+        if let Err(error) = beam(&socket, &url, &beacon).await {
+            eprintln!("team service beacon failed: {error}");
+        }
+        tokio::time::sleep(BEACON_EVERY).await;
+    }
+}
+
+async fn beam(socket: &UdpSocket, url: &str, beacon: &[u8]) -> Result<(), Failure> {
+    let uri: Uri = url.parse()?;
+    let host = uri.host().ok_or("the team service address has no host")?;
+    let service = tokio::net::lookup_host((host, BEACON_PORT))
+        .await?
+        .find(SocketAddr::is_ipv4)
+        .ok_or("the team service has no IPv4 address")?;
+    socket.send_to(beacon, service).await?;
+    Ok(())
 }
 
 async fn relay(url: &str, hello: Relay, local: TcpStream) -> Result<(), Failure> {
@@ -479,5 +706,108 @@ async fn relay(url: &str, hello: Relay, local: TcpStream) -> Result<(), Failure>
     tokio::select! {
         result = outgoing => result,
         result = incoming => result,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+    use tokio::io::{AsyncBufReadExt, BufReader, Lines};
+    use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+
+    struct Game {
+        lines: Lines<BufReader<OwnedReadHalf>>,
+        writer: OwnedWriteHalf,
+    }
+
+    impl Game {
+        async fn attach(link: u16) -> Game {
+            let (reader, writer) = TcpStream::connect(("127.0.0.1", link)).await.unwrap().into_split();
+            Game {
+                lines: BufReader::new(reader).lines(),
+                writer,
+            }
+        }
+
+        async fn say(&mut self, line: &str) {
+            self.writer.write_all(format!("{line}\n").as_bytes()).await.unwrap();
+        }
+
+        async fn until(&mut self, wanted: impl Fn(&Value) -> bool) -> Value {
+            loop {
+                let line = self.lines.next_line().await.unwrap().expect("the launcher closed the link");
+                let state: Value = serde_json::from_str(&line).unwrap();
+                if wanted(&state) {
+                    return state;
+                }
+            }
+        }
+    }
+
+    fn launcher(seed: u8, nick: &str) -> (Handle, UnboundedReceiver<Update>) {
+        let (updates, inbox) = unbounded_channel();
+        let profile = Profile {
+            nick: nick.into(),
+            skin: "red".into(),
+            build: "1".into(),
+        };
+        let handle = start(SigningKey::from_bytes(&[seed; 32]), profile, move |update| {
+            let _ = updates.send(update);
+        });
+        (handle.unwrap(), inbox)
+    }
+
+    #[tokio::test]
+    #[ignore = "needs a running team service in SUBSTRATUM_BACKEND, set SUBSTRATUM_ROUTE=relay when its beacon port is closed"]
+    async fn a_guest_reaches_the_host_world() {
+        let world = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let world_port = world.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            while let Ok((socket, _)) = world.accept().await {
+                tokio::spawn(async move {
+                    let (mut reader, mut writer) = socket.into_split();
+                    let _ = tokio::io::copy(&mut reader, &mut writer).await;
+                });
+            }
+        });
+        let (host, mut host_updates) = launcher(11, "Host");
+        let (guest, mut guest_updates) = launcher(12, "Guest");
+        let code = loop {
+            if let Some(team) = host_updates.recv().await.unwrap().team {
+                break team.code;
+            }
+        };
+        while guest_updates.recv().await.unwrap().team.is_none() {}
+        let mut host_game = Game::attach(host.link).await;
+        let mut guest_game = Game::attach(guest.link).await;
+        guest.send(Command::Join(code));
+        host_game.say(r#"{"type":"presence","presence":"menu"}"#).await;
+        guest_game.say(r#"{"type":"presence","presence":"ready"}"#).await;
+        host_game
+            .until(|state| {
+                state["team"]["members"]
+                    .as_array()
+                    .is_some_and(|members| members.iter().any(|member| member["presence"] == "ready"))
+            })
+            .await;
+        host_game.say(r#"{"type":"start"}"#).await;
+        host_game.until(|state| !state["team"]["session"].is_null()).await;
+        host_game
+            .say(&format!(r#"{{"type":"opened","port":{world_port}}}"#))
+            .await;
+        let door = guest_game.until(|state| state["door"].is_u64()).await["door"].as_u64().unwrap();
+        let mut local = TcpStream::connect(("127.0.0.1", door as u16)).await.unwrap();
+        local.write_all(b"through the door").await.unwrap();
+        let mut echo = [0; 16];
+        local.read_exact(&mut echo).await.unwrap();
+        assert_eq!(&echo, b"through the door");
+        let expected = std::env::var("SUBSTRATUM_ROUTE").as_deref() != Ok("relay");
+        let route = loop {
+            if let Some(direct) = guest_updates.recv().await.unwrap().direct {
+                break direct;
+            }
+        };
+        assert_eq!(route, expected);
     }
 }

@@ -2,6 +2,8 @@ import { Theme } from "theme.slint";
 
 export enum WindowAction { minimize, close }
 
+export enum Route { none, direct, relay }
+
 export component Marker inherits Rectangle {
     in property <bool> left;
     in property <int> size: 4;

@@ -18,15 +18,17 @@ use axum::serve::ListenerExt;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use substratum_protocol::{
-    CODE_ALPHABET, CODE_LENGTH, CONTROL_PATH, Profile, RELAY_CHUNK, RELAY_PATH, Refusal, Relay,
-    ToClient, ToServer, hex, verify_hello,
+    BEACON_LENGTH, CODE_ALPHABET, CODE_LENGTH, CONTROL_PATH, Profile, RELAY_CHUNK, RELAY_PATH,
+    Refusal, Relay, ToClient, ToServer, hex, verify_hello,
 };
+use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Instant, timeout};
 
-use hub::Hub;
+use hub::{Hub, Keys};
 
 const DEFAULT_BIND: &str = "127.0.0.1:7878";
+const DEFAULT_BEACON: &str = "0.0.0.0:7878";
 const CLIENT_HEADER: &str = "x-real-ip";
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 const ACCEPT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -91,18 +93,39 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let address: SocketAddr = std::env::var("SUBSTRATUM_BIND")
         .unwrap_or_else(|_| DEFAULT_BIND.to_owned())
         .parse()?;
+    let beacon: SocketAddr = std::env::var("SUBSTRATUM_BEACON")
+        .unwrap_or_else(|_| DEFAULT_BEACON.to_owned())
+        .parse()?;
+    let app = App::default();
+    let beacons = UdpSocket::bind(beacon).await?;
+    tokio::spawn(listen(beacons, app.hub.clone()));
     let router = Router::new()
         .route(CONTROL_PATH, get(control))
         .route(RELAY_PATH, get(relay))
-        .with_state(App::default());
+        .with_state(app);
     let listener = tokio::net::TcpListener::bind(address)
         .await?
         .tap_io(|socket| {
             let _ = socket.set_nodelay(true);
         });
-    println!("substratum-backend listening on {address}");
+    println!("substratum-backend listening on {address}, beacons on udp {beacon}");
     axum::serve(listener, router).await?;
     Ok(())
+}
+
+async fn listen(socket: UdpSocket, hub: Arc<Mutex<Hub>>) {
+    let mut buffer = [0; BEACON_LENGTH + 1];
+    loop {
+        match socket.recv_from(&mut buffer).await {
+            Ok((BEACON_LENGTH, from)) => {
+                if let Ok(beacon) = buffer[..BEACON_LENGTH].try_into() {
+                    lock(&hub).locate(&beacon, from);
+                }
+            }
+            Ok(_) => {}
+            Err(error) => eprintln!("beacon receive failed: {error}"),
+        }
+    }
 }
 
 fn admit(app: &App, headers: &HeaderMap) -> Option<Ticket> {
@@ -154,7 +177,11 @@ async fn serve_control(socket: WebSocket, app: App) {
         return;
     };
     let (outbox, mut inbox) = mpsc::unbounded_channel();
-    let generation = lock(&app.hub).connect(&uuid, profile, hex(&random_bytes::<32>()), outbox);
+    let keys = Keys {
+        token: hex(&random_bytes::<32>()),
+        beacon: random_bytes(),
+    };
+    let generation = lock(&app.hub).connect(&uuid, profile, keys, outbox);
     let mut ping = tokio::time::interval(PING);
     let mut heard = Instant::now();
     let mut window = heard;

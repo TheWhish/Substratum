@@ -117,6 +117,9 @@ msgstr "LICENSE"
 msgid "ЛОГОВ ПОКА НЕТ"
 msgstr "NO LOGS YET"
 
+msgid "НАПРЯМУЮ"
+msgstr "DIRECT"
+
 msgid "НАСТРОЙКИ"
 msgstr "SETTINGS"
 
@@ -236,6 +239,9 @@ msgstr "FILES"
 
 msgid "ХОСТ"
 msgstr "HOST"
+
+msgid "ЧЕРЕЗ СЕРВЕР"
+msgstr "VIA SERVER"
 
 msgid "ЭТОТ НИК УЖЕ ЕСТЬ В КОМАНДЕ"
 msgstr "THIS NICKNAME IS ALREADY IN THE TEAM"

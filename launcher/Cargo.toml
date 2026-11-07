@@ -16,10 +16,12 @@ strip = true
 panic = "abort"
 
 [dependencies]
-ed25519-dalek = "3.0.0"
+ed25519-dalek = { version = "3.0.0", features = ["alloc", "pkcs8"] }
 futures-util = "0.3.34"
 getrandom = "0.4.3"
 png = "0.18.1"
+quinn = { version = "0.11.12", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha1 = "0.11.0"

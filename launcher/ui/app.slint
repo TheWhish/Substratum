@@ -3,7 +3,7 @@ import "../assets/fonts/IBMPlexMono-Medium.ttf";
 import "../assets/fonts/VT323-Regular.ttf";
 import { Theme } from "theme.slint";
 import { Logo, VhsLayer } from "vhs.slint";
-import { Marker, MenuItem, Osd, RecDot, Slot, WindowAction, WindowButton } from "widgets.slint";
+import { Marker, MenuItem, Osd, RecDot, Route, Slot, WindowAction, WindowButton } from "widgets.slint";
 import { Choice, PlayPanel, ProfilePanel, SettingsPanel } from "pages.slint";
 
 export { Choice } from "pages.slint";
@@ -18,7 +18,7 @@ export enum Place { home, logs, screenshots, latest-log }
 
 export enum Rejection { unknown, full, locked, nick-taken, failed }
 
-export { Slot } from "widgets.slint";
+export { Route, Slot } from "widgets.slint";
 
 export component AppWindow inherits Window {
     in property <string> version;
@@ -37,6 +37,7 @@ export component AppWindow inherits Window {
     in-out property <string> nick;
     in property <[Slot]> slots;
     in property <bool> team-online;
+    in property <Route> team-route;
     in property <image> front;
     in property <image> back;
     in property <[image]> presets;
@@ -392,6 +393,7 @@ export component AppWindow inherits Window {
                                 if root.panel == Panel.play: PlayPanel {
                                     slots: root.slots;
                                     online: root.team-online;
+                                    route: root.team-route;
                                     team-code: root.team-code;
                                     team-cells: root.team-cells;
                                     join-cells: root.join-cells;

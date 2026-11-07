@@ -1,17 +1,27 @@
 use std::collections::HashMap;
+use std::net::SocketAddr;
 
 use substratum_protocol::{
-    MAX_PLAYERS, Member, Presence, Profile, Refusal, Session, Team, ToClient, ToServer, valid_code,
+    BEACON_LENGTH, MAX_PLAYERS, Member, Presence, Profile, Refusal, Session, Team, ToClient,
+    ToServer, hex, valid_code,
 };
 use tokio::sync::mpsc::UnboundedSender;
 
 pub type Outbox = UnboundedSender<ToClient>;
 
+pub type Beacon = [u8; BEACON_LENGTH];
+
+pub struct Keys {
+    pub token: String,
+    pub beacon: Beacon,
+}
+
 struct Player {
     code: String,
     outbox: Option<Outbox>,
     generation: u64,
-    token: String,
+    keys: Keys,
+    address: Option<SocketAddr>,
 }
 
 #[derive(Default)]
@@ -19,12 +29,13 @@ pub struct Hub {
     teams: HashMap<String, Team>,
     players: HashMap<String, Player>,
     tokens: HashMap<String, String>,
+    beacons: HashMap<Beacon, String>,
     dirty: Vec<String>,
 }
 
 impl Hub {
-    pub fn connect(&mut self, uuid: &str, profile: Profile, token: String, outbox: Outbox) -> u64 {
-        let generation = self.attach(uuid, profile, token, outbox);
+    pub fn connect(&mut self, uuid: &str, profile: Profile, keys: Keys, outbox: Outbox) -> u64 {
+        let generation = self.attach(uuid, profile, keys, outbox);
         self.flush();
         generation
     }
@@ -64,6 +75,10 @@ impl Hub {
             ToServer::Start => self.start(uuid),
             ToServer::Opened => self.opened(uuid),
             ToServer::Ended => self.ended(uuid),
+            ToServer::Punch => {
+                self.punch(uuid);
+                Ok(())
+            }
         };
         self.flush();
         result
@@ -80,10 +95,21 @@ impl Hub {
         Ok((team.host.clone(), outbox))
     }
 
-    fn attach(&mut self, uuid: &str, profile: Profile, token: String, outbox: Outbox) -> u64 {
+    pub fn locate(&mut self, beacon: &Beacon, address: SocketAddr) {
+        let player = self
+            .beacons
+            .get(beacon)
+            .and_then(|uuid| self.players.get_mut(uuid));
+        if let Some(player) = player {
+            player.address = Some(address);
+        }
+    }
+
+    fn attach(&mut self, uuid: &str, profile: Profile, keys: Keys, outbox: Outbox) -> u64 {
         let welcome = ToClient::Welcome {
             uuid: uuid.to_owned(),
-            token: token.clone(),
+            token: keys.token.clone(),
+            beacon: hex(&keys.beacon),
         };
         let _ = outbox.send(welcome);
         let Some(player) = self.players.get_mut(uuid) else {
@@ -96,22 +122,27 @@ impl Hub {
                 online: true,
             };
             let code = self.found(member);
-            self.tokens.insert(token.clone(), uuid.to_owned());
+            self.tokens.insert(keys.token.clone(), uuid.to_owned());
+            self.beacons.insert(keys.beacon, uuid.to_owned());
             self.players.insert(
                 uuid.to_owned(),
                 Player {
                     code: code.clone(),
                     outbox: Some(outbox),
                     generation: 0,
-                    token,
+                    keys,
+                    address: None,
                 },
             );
             self.touch(&code);
             return 0;
         };
-        let stale = std::mem::replace(&mut player.token, token.clone());
-        self.tokens.remove(&stale);
-        self.tokens.insert(token, uuid.to_owned());
+        let stale = std::mem::replace(&mut player.keys, keys);
+        self.tokens.remove(&stale.token);
+        self.beacons.remove(&stale.beacon);
+        self.tokens.insert(player.keys.token.clone(), uuid.to_owned());
+        self.beacons.insert(player.keys.beacon, uuid.to_owned());
+        player.address = None;
         player.generation += 1;
         player.outbox = Some(outbox);
         let (code, generation) = (player.code.clone(), player.generation);
@@ -155,6 +186,29 @@ impl Hub {
         }
         self.touch(&code);
         true
+    }
+
+    fn punch(&self, guest: &str) {
+        let Ok((host, host_outbox)) = self.dial(guest) else {
+            return;
+        };
+        let Some(seeker) = self.players.get(guest) else {
+            return;
+        };
+        let target = self.players.get(&host).and_then(|player| player.address);
+        let (Some(guest_address), Some(host_address), Some(guest_outbox)) =
+            (seeker.address, target, seeker.outbox.as_ref())
+        else {
+            return;
+        };
+        let _ = guest_outbox.send(ToClient::Punch {
+            peer: host,
+            address: host_address,
+        });
+        let _ = host_outbox.send(ToClient::Punch {
+            peer: guest.to_owned(),
+            address: guest_address,
+        });
     }
 
     fn profile(&mut self, uuid: &str, profile: Profile) -> Result<(), Refusal> {
@@ -329,7 +383,8 @@ impl Hub {
     fn forget(&mut self, uuid: &str) {
         self.depart(uuid);
         if let Some(player) = self.players.remove(uuid) {
-            self.tokens.remove(&player.token);
+            self.tokens.remove(&player.keys.token);
+            self.beacons.remove(&player.keys.beacon);
         }
     }
 
@@ -449,8 +504,16 @@ mod tests {
             skin: "yellow".into(),
             build: "0.1.0".into(),
         };
-        hub.connect(uuid, profile, format!("token-{uuid}"), outbox);
+        let keys = Keys {
+            token: format!("token-{uuid}"),
+            beacon: beacon(uuid),
+        };
+        hub.connect(uuid, profile, keys, outbox);
         inbox
+    }
+
+    fn beacon(uuid: &str) -> Beacon {
+        [uuid.as_bytes()[0]; BEACON_LENGTH]
     }
 
     fn last_team(inbox: &mut UnboundedReceiver<ToClient>) -> Team {
@@ -552,6 +615,41 @@ mod tests {
         let _second = connect(&mut hub, "h", "Host");
         assert!(!hub.disconnect("h", 0));
         assert_eq!(hub.owner("token-h"), Some("h"));
+    }
+
+    #[test]
+    fn participants_learn_each_other_addresses_once_the_game_is_open() {
+        let mut hub = Hub::default();
+        let mut host = connect(&mut hub, "h", "Host");
+        let mut guest = connect(&mut hub, "g", "Guest");
+        hub.handle("g", ToServer::Join { code: code(&hub, "h") }).unwrap();
+        hub.handle("h", ToServer::Presence { presence: Presence::Menu }).unwrap();
+        hub.handle("g", ToServer::Presence { presence: Presence::Ready }).unwrap();
+        hub.handle("h", ToServer::Start).unwrap();
+        let host_address: SocketAddr = "198.51.100.1:4000".parse().unwrap();
+        let guest_address: SocketAddr = "203.0.113.2:5000".parse().unwrap();
+        hub.locate(&beacon("h"), host_address);
+        hub.locate(&beacon("g"), guest_address);
+        let punches = |inbox: &mut UnboundedReceiver<ToClient>| {
+            std::iter::from_fn(|| inbox.try_recv().ok())
+                .filter_map(|message| match message {
+                    ToClient::Punch { peer, address } => Some((peer, address)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        hub.handle("g", ToServer::Punch).unwrap();
+        assert!(punches(&mut guest).is_empty());
+        hub.handle("h", ToServer::Opened).unwrap();
+        hub.handle("h", ToServer::Punch).unwrap();
+        assert!(punches(&mut host).is_empty());
+        hub.handle("g", ToServer::Punch).unwrap();
+        assert_eq!(punches(&mut guest), [("h".to_owned(), host_address)]);
+        assert_eq!(punches(&mut host), [("g".to_owned(), guest_address)]);
+        let _ = connect(&mut hub, "g", "Guest");
+        hub.locate(&beacon("x"), guest_address);
+        hub.handle("g", ToServer::Punch).unwrap();
+        assert!(punches(&mut host).is_empty());
     }
 
     #[test]

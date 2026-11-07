@@ -1,9 +1,10 @@
 import { Theme } from "theme.slint";
-import { CodeCells, LaunchButton, Marker, Osd, PanelHeader, Setting, Slot, SlotCard } from "widgets.slint";
+import { CodeCells, LaunchButton, Marker, Osd, PanelHeader, Route, Setting, Slot, SlotCard } from "widgets.slint";
 
 export component PlayPanel inherits VerticalLayout {
     in property <[Slot]> slots;
     in property <bool> online;
+    in property <Route> route;
     in property <string> team-code;
     in property <[string]> team-cells;
     in property <[string]> join-cells;
@@ -75,7 +76,10 @@ export component PlayPanel inherits VerticalLayout {
 
         PanelHeader {
             title: @tr("КОМАНДА");
-            detail: root.online ? root.slots.length + " / 4" : @tr("НЕТ СВЯЗИ");
+            detail: !root.online ? @tr("НЕТ СВЯЗИ")
+                : root.route == Route.direct ? @tr("НАПРЯМУЮ")
+                : root.route == Route.relay ? @tr("ЧЕРЕЗ СЕРВЕР")
+                : root.slots.length + " / 4";
         }
         if root.slots.length > 1: Osd {
             text: @tr("ПОКИНУТЬ");
