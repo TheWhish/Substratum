@@ -65,15 +65,17 @@ object Atmosphere {
         val stencil: List<Pass>,
         val world: List<Pass>,
         val lens: List<Pass>,
+        val film: List<Pass>,
         val view: List<Pass>,
-        private val swap: RenderTarget,
+        val swap: RenderTarget,
         private val targets: List<RenderTarget>,
         private val vao: Int
     ) : AutoCloseable {
         val light: Pass get() = world.first()
         val prefilter: Pass get() = lens.first()
-        val composite: Pass get() = lens[lens.size - 2]
-        val bloom: List<Pass> = lens.subList(0, lens.size - 2)
+        val composite: Pass get() = lens.last()
+        val bloom: List<Pass> = lens.subList(0, lens.size - 1)
+        val grade: Pass get() = film.first()
         private val portals = GL20.glGetUniformLocation(light.effect.id, "Portals")
         private val portalCount = GL20.glGetUniformLocation(light.effect.id, "PortalCount")
 
@@ -105,7 +107,7 @@ object Atmosphere {
         }
 
         override fun close() {
-            (depth + stencil + world + lens + view).forEach { it.effect.close() }
+            (depth + stencil + world + lens + film + view).forEach { it.effect.close() }
             targets.forEach(RenderTarget::destroyBuffers)
             GlStateManager._glDeleteVertexArrays(vao)
         }
@@ -120,6 +122,7 @@ object Atmosphere {
     private var lit = false
     private var hands = true
     private var composited = false
+    private var smoothed: RenderTarget? = null
     private var capturedLayer = NO_LAYER
     private var sceneDepth = false
     private val viewProjection = Matrix4f()
@@ -313,7 +316,7 @@ object Atmosphere {
     fun render(minecraft: Minecraft, frameTicks: Float, partialTick: Float) {
         seconds = (seconds + frameTicks / 20f) % SECONDS_WRAP
         val strength = strength(minecraft.level ?: return, partialTick)
-        val current = active(minecraft, strength) ?: return
+        val current = active(minecraft, strength) ?: return Smaa.smooth(minecraft)
         val glare = 1f + SanityEffects.glare(partialTick) * ClientConfig.intensity
         val lighting = if (lit) 1f else 0f
         lit = false
@@ -328,9 +331,12 @@ object Atmosphere {
             safeGetUniform("Lit").set(lighting)
             safeGetUniform("Haze").set(HAZE * strength * glare)
             safeGetUniform("Hands").set(if (hands) 1f else 0f)
-            safeGetUniform("Time").set(seconds)
             safeGetUniform("Strength").set(strength)
             safeGetUniform("Bloom").set(BLOOM * glare)
+        }
+        current.grade.effect.apply {
+            safeGetUniform("Time").set(seconds)
+            safeGetUniform("Strength").set(strength)
             safeGetUniform("Grain").set(GRAIN * SanityEffects.grain(partialTick) * ClientConfig.intensity)
             safeGetUniform("Aberration").set(SanityEffects.aberration(partialTick) * strength)
             safeGetUniform("Ghost").set(SanityEffects.ghost(partialTick) * strength)
@@ -346,6 +352,9 @@ object Atmosphere {
         main.setFilterMode(GL11.GL_LINEAR)
         current.run(current.lens)
         main.setFilterMode(GL11.GL_NEAREST)
+        smoothed = Smaa.resolve(minecraft, current.swap)
+        prepare()
+        current.run(current.film)
         main.bindWrite(true)
     }
 
@@ -393,13 +402,6 @@ object Atmosphere {
     private fun wrap(coordinate: Double): Float =
         (coordinate - floor(coordinate / LightVolume.SIDE) * LightVolume.SIDE).toFloat()
 
-    private fun hdr(width: Int, height: Int, format: Int): TextureTarget = TextureTarget(width, height, false, Minecraft.ON_OSX).apply {
-        GlStateManager._bindTexture(getColorTextureId())
-        GlStateManager._texImage2D(GL11.GL_TEXTURE_2D, 0, format, this.width, this.height, 0, GL11.GL_RGB, GL11.GL_FLOAT, null)
-        GlStateManager._bindTexture(0)
-        setFilterMode(GL11.GL_LINEAR)
-    }
-
     private fun rebuild(minecraft: Minecraft): Chain? {
         reset()
         return runCatching { build(minecraft) }.onFailure {
@@ -426,7 +428,7 @@ object Atmosphere {
             val down = List(LEVELS) { keep(hdr(maxOf(1, main.width shr (it + 1)), maxOf(1, main.height shr (it + 1)), GL30.GL_R11F_G11F_B10F)) }
             val up = List(LEVELS - 1) { keep(hdr(down[it].width, down[it].height, GL30.GL_R11F_G11F_B10F)) }
             val light = keep(hdr(down[0].width, down[0].height, GL30.GL_RGBA16F))
-            val swap = keep(TextureTarget(main.width, main.height, false, Minecraft.ON_OSX)).apply { setFilterMode(GL11.GL_LINEAR) }
+            val swap = keep(hdr(main.width, main.height, GL11.GL_RGB10_A2))
             val scene = keep(hdr(main.width, main.height, GL30.GL_R32F))
             val depth = "DepthSampler" to IntSupplier(main::getDepthTextureId)
             val lighting = "LightSampler" to IntSupplier(light::getColorTextureId)
@@ -443,10 +445,11 @@ object Atmosphere {
                 lens.last().effect.safeGetUniform("Scatter").set(SCATTER[i])
             }
             lens += pass("substratum_atmosphere", main, swap, "BloomSampler" to IntSupplier(up[0]::getColorTextureId), lighting, depth)
-            lens += pass("substratum_fxaa", swap, main)
+            val film = pass("substratum_film", swap, main)
+            film.effect.setSampler("DiffuseSampler") { (smoothed ?: swap).colorTextureId }
             val view = pass("substratum_portal", swap, main, lighting, "BloomSampler" to IntSupplier(up[0]::getColorTextureId))
             vao = GlStateManager._glGenVertexArrays()
-            return Chain(main.width, main.height, listOf(copy), listOf(outline), listOf(world), lens, listOf(view), swap, targets, vao)
+            return Chain(main.width, main.height, listOf(copy), listOf(outline), listOf(world), lens, listOf(film), listOf(view), swap, targets, vao)
         } catch (e: Exception) {
             effects.forEach(EffectInstance::close)
             targets.forEach(RenderTarget::destroyBuffers)
@@ -454,4 +457,11 @@ object Atmosphere {
             throw e
         }
     }
+}
+
+internal fun hdr(width: Int, height: Int, format: Int): TextureTarget = TextureTarget(width, height, false, Minecraft.ON_OSX).apply {
+    GlStateManager._bindTexture(getColorTextureId())
+    GlStateManager._texImage2D(GL11.GL_TEXTURE_2D, 0, format, this.width, this.height, 0, GL11.GL_RGB, GL11.GL_FLOAT, null)
+    GlStateManager._bindTexture(0)
+    setFilterMode(GL11.GL_LINEAR)
 }

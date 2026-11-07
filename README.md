@@ -67,4 +67,4 @@ team.example.com {
 
 Исходный код открыт только для чтения: [Substratum Source-Available License](LICENSE). Смотреть, изучать и предлагать правки можно; распространять игру, лаунчер, мод или их части, выкладывать сборки и поднимать свои сервисы команд без разрешения автора нельзя. Играть — только через официальный лаунчер. Версии до этой лицензии остаются под MIT.
 
-Сторонние части сохраняют свои лицензии: Immersive Portals — Apache-2.0, шрифты — SIL OFL 1.1, интерфейс лаунчера сделан на [Slint](https://slint.dev) (Royalty-free License 2.0).
+Сторонние части сохраняют свои лицензии: Immersive Portals — Apache-2.0, шрифты — SIL OFL 1.1, интерфейс лаунчера сделан на [Slint](https://slint.dev) (Royalty-free License 2.0), сглаживание — [SMAA](https://github.com/iryoku/smaa) (MIT).

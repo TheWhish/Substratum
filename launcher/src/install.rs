@@ -29,6 +29,8 @@ pub struct Manifest {
     #[serde(default)]
     launcher: Option<Release>,
     mods: Vec<Mod>,
+    #[serde(default)]
+    configs: Vec<Config>,
 }
 
 #[derive(Deserialize)]
@@ -53,6 +55,14 @@ impl Manifest {
 #[derive(Deserialize)]
 struct Mod {
     file: String,
+    url: String,
+    size: u64,
+    sha256: String,
+}
+
+#[derive(Deserialize)]
+struct Config {
+    path: String,
     url: String,
     size: u64,
     sha256: String,
@@ -317,6 +327,7 @@ pub fn run(home: &Path, progress: &Progress) -> Result<Ready> {
     let mut downloads = minecraft(&agent, home, &manifest.minecraft)?;
     downloads.extend(fabric(&agent, home, &manifest)?);
     downloads.extend(mods(home, &manifest.mods)?);
+    downloads.extend(configs(home, &manifest.configs)?);
     fetch::all(&agent, downloads, progress)?;
 
     prune_mods(home, &manifest.mods)?;
@@ -517,6 +528,24 @@ fn mods(home: &Path, mods: &[Mod]) -> Result<Vec<Download>> {
         .collect()
 }
 
+fn configs(home: &Path, configs: &[Config]) -> Result<Vec<Download>> {
+    let instance = home.join("instance");
+    let mut downloads = Vec::new();
+    for entry in configs {
+        let path = inside(&instance, &entry.path)?;
+        if path.exists() {
+            continue;
+        }
+        downloads.push(Download {
+            url: entry.url.clone(),
+            path,
+            size: Some(entry.size),
+            hash: Hash::sha256(&entry.sha256)?,
+        });
+    }
+    Ok(downloads)
+}
+
 fn mod_file(file: &str) -> Result<&str> {
     let plain = Path::new(file).file_name() == Some(OsStr::new(file));
     match plain && file.ends_with(".jar") {
@@ -646,5 +675,25 @@ mod tests {
         for name in ["../x.jar", "mods/x.jar", "x.zip", "C:\\x.jar", ""] {
             assert!(mod_file(name).is_err(), "{name}");
         }
+    }
+
+    #[test]
+    fn configs_never_replace_player_files() {
+        let home = std::env::temp_dir().join("substratum-config-test");
+        let _ = fs::remove_dir_all(&home);
+        let config = |path: &str| Config {
+            path: path.to_owned(),
+            url: "https://example.invalid/config".to_owned(),
+            size: 1,
+            sha256: "0".repeat(64),
+        };
+        let kept = home.join("instance").join("config").join("kept.json");
+        fs::create_dir_all(kept.parent().unwrap()).unwrap();
+        fs::write(&kept, "player").unwrap();
+        let downloads = configs(&home, &[config("config/kept.json"), config("config/new.json")]).unwrap();
+        assert_eq!(downloads.len(), 1);
+        assert_eq!(downloads[0].path, home.join("instance").join("config").join("new.json"));
+        assert!(configs(&home, &[config("../options.txt")]).is_err());
+        fs::remove_dir_all(&home).unwrap();
     }
 }

@@ -83,8 +83,19 @@ jobs:
             size = $exeInfo.size
             sha256 = $exeInfo.sha256
           }
+          $pack = (Resolve-Path pack).Path
+          $configs = @(Get-ChildItem pack -Recurse -File | ForEach-Object {
+            $relative = $_.FullName.Substring($pack.Length + 1).Replace('\', '/')
+            [ordered]@{
+              path = $relative
+              url = "https://raw.githubusercontent.com/$env:GITHUB_REPOSITORY/$env:GITHUB_REF_NAME/pack/$relative"
+              size = $_.Length
+              sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+          })
           $manifest.build = $env:VERSION
           $manifest | Add-Member -Force -NotePropertyName launcher -NotePropertyValue $launcher
+          $manifest | Add-Member -Force -NotePropertyName configs -NotePropertyValue $configs
           $manifest | ConvertTo-Json -Depth 10 | Set-Content dist/manifest.json -Encoding utf8NoBOM
           Get-Content dist/manifest.json
 

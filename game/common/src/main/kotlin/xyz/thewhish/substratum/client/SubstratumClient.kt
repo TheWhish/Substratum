@@ -34,6 +34,7 @@ object SubstratumClient {
     fun init() {
         Launcher.require()
         Menus.init()
+        Bench.register()
         ClientTickEvent.CLIENT_POST.register(Lobby::tick)
         ColorHandlerRegistry.registerBlockColors({ _, level, pos, tintIndex -> hostTint(level, pos, tintIndex) }, ModBlocks.RIFT_CUT)
         RenderTypeRegistry.register(RenderType.cutout(), ModBlocks.ALMOND_WATER.get())
@@ -52,6 +53,7 @@ object SubstratumClient {
         ClientTickEvent.CLIENT_POST.register(SanityEffects::tick)
         ClientTickEvent.CLIENT_POST.register(Atmosphere::tick)
         ClientTickEvent.CLIENT_POST.register(Vhs::tick)
+        ClientTickEvent.CLIENT_POST.register(Labels::tick)
         ClientGuiEvent.RENDER_HUD.register(Vhs::renderHud)
         ClientTickEvent.CLIENT_POST.register(ProbeView::tick)
         ClientGuiEvent.RENDER_HUD.register { graphics, _ -> ProbeView.renderHud(graphics) }
@@ -59,6 +61,8 @@ object SubstratumClient {
         ReloadListenerRegistry.register(PackType.CLIENT_RESOURCES, ResourceManagerReloadListener {
             ClientConfig.load()
             Atmosphere.reset()
+            Smaa.reset()
+            Labels.reset()
         }, Substratum.id("atmosphere"))
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register {
             Lobby.entered(Minecraft.getInstance())

@@ -1,0 +1,20 @@
+{
+    "blend": { "func": "add", "srcrgb": "one", "dstrgb": "zero" },
+    "vertex": "substratum_screen",
+    "fragment": "substratum_film",
+    "samplers": [ { "name": "DiffuseSampler" } ],
+    "uniforms": [
+        { "name": "InSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+        { "name": "Time", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Strength", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "Vignette", "type": "float", "count": 1, "values": [ 0.3 ] },
+        { "name": "Grain", "type": "float", "count": 1, "values": [ 0.035 ] },
+        { "name": "Aberration", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Ghost", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Tunnel", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Drain", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Vhs", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "VhsSeed", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "VhsShake", "type": "float", "count": 1, "values": [ 1.0 ] }
+    ]
+}

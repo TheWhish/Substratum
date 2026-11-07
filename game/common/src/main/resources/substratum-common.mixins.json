@@ -16,6 +16,7 @@
   "client": [
     "AtmosphereMixin",
     "BackroomsLightMixin",
+    "BenchFrameMixin",
     "ClientLightOrderMixin",
     "EntityLightMixin",
     "FogMixin",

@@ -40,8 +40,9 @@ source and no rights are granted except those written below.
 
    Third-party components keep their own licenses and are not covered by this
    license, including Immersive Portals (Apache License 2.0), the bundled
-   fonts (SIL Open Font License 1.1) and the Slint toolkit (Slint
-   Royalty-free License 2.0). Minecraft is a trademark of Mojang AB; this
+   fonts (SIL Open Font License 1.1), the Slint toolkit (Slint
+   Royalty-free License 2.0) and SMAA (MIT License,
+   game/common/src/main/shaders/smaa.glsl). Minecraft is a trademark of Mojang AB; this
    project is not affiliated with Mojang or Microsoft.
 
 5. Earlier versions

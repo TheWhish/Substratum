@@ -52,7 +52,7 @@ object Homecoming {
 
     private fun onJoin(player: ServerPlayer) {
         val left = leftAt.remove(player.uuid)
-        if (player.level().dimension() != SubstratumLevels.LEVEL_0 || !player.isAlive) return
+        if (player.level().dimension() != SubstratumLevels.LEVEL_0 || !player.isAlive || Epoch.frozen) return
         if (left != null && System.currentTimeMillis() - left <= ABSENCE_MILLIS) return
         send(player)
     }

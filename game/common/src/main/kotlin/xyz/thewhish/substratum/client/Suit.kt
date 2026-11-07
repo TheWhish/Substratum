@@ -18,7 +18,7 @@ object Suit {
     private const val LAMP = "lamp"
     private val FABRIC = CubeDeformation(0.25f)
     private val GLOVE = CubeDeformation(0.4f)
-    private val CUFF = CubeDeformation(0.5f, 0.05f, 0.5f)
+    private val CUFF = CubeDeformation(0.6f, 0.2f, 0.6f)
     private val BOOT = CubeDeformation(0.4f, 0.3f, 0.4f)
     private val BELT = CubeDeformation(0f, 0.25f, 0f)
     private val LID = CubeDeformation(0.1f)
@@ -129,7 +129,6 @@ object Suit {
             "head",
             CubeListBuilder.create()
                 .texOffs(0, 0).addBox(-4f, -8f, -4f, 8f, 8f, 8f, FABRIC)
-                .texOffs(0, 34).addBox(-3.5f, -7f, 3.75f, 7f, 6f, 1f)
                 .texOffs(48, 16).addBox(-3.5f, -7.5f, -5.25f, 7f, 1f, 1f)
                 .texOffs(48, 18).addBox(-3.5f, -3.5f, -5.25f, 7f, 1f, 1f)
                 .texOffs(60, 20).addBox(-3.5f, -6.5f, -5.25f, 1f, 3f, 1f)
@@ -199,7 +198,7 @@ object Suit {
             CubeListBuilder.create().mirror(left)
                 .texOffs(72, 0).addBox(-2f, 0f, -2f, 4f, 12f, 4f, FABRIC)
                 .texOffs(16, 16).addBox(-2f, 8f, -2f, 4f, 4f, 4f, BOOT)
-                .texOffs(32, 16).addBox(-2f, 8f, -2f, 4f, 1f, 4f, CUFF),
+                .texOffs(32, 16).addBox(-2f, 7.5f, -2f, 4f, 1f, 4f, CUFF),
             PartPose.offset(x, 12f, 0f),
         )
     }

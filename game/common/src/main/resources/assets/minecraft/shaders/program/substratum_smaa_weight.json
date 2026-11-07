@@ -1,0 +1,9 @@
+{
+    "blend": { "func": "add", "srcrgb": "one", "dstrgb": "zero" },
+    "vertex": "substratum_smaa_weight",
+    "fragment": "substratum_smaa_weight",
+    "samplers": [ { "name": "DiffuseSampler" }, { "name": "AreaSampler" }, { "name": "SearchSampler" } ],
+    "uniforms": [
+        { "name": "InSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] }
+    ]
+}

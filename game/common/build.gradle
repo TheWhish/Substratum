@@ -47,3 +47,11 @@ tasks.register("shaderCheck", JavaExec) {
 tasks.named("check") { dependsOn checks.keySet() }
 
 tasks.named("test") { failOnNoDiscoveredTests = false }
+
+processResources {
+    def smaa = file("src/main/shaders/smaa.glsl")
+    inputs.file(smaa)
+    filesMatching("assets/minecraft/shaders/program/substratum_smaa_*") {
+        filter { String line -> line.trim() == "#moj_import <smaa.glsl>" ? smaa.text : line }
+    }
+}
