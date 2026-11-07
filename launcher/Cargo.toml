@@ -1,9 +1,9 @@
 [package]
 name = "substratum-launcher"
-version = "0.1.0"
+version = "0.2.0-alpha"
 edition = "2024"
 description = "Launcher for Substratum"
-license = "MIT"
+license-file = "../LICENSE"
 publish = false
 
 [build-dependencies]

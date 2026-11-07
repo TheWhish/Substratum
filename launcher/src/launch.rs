@@ -9,6 +9,7 @@ use crate::fetch::{Error, Result, inside, io_error};
 use crate::install::{self, Argument, FabricProfile, Version};
 use crate::profile::Profile;
 use crate::settings::Settings;
+use crate::team::GameLink;
 
 const JAVA: &str = "bin/javaw.exe";
 const LAUNCHER_NAME: &str = "substratum-launcher";
@@ -22,7 +23,7 @@ pub fn start(
     profile: &Profile,
     settings: &Settings,
     heap: u32,
-    link: u16,
+    link: &GameLink,
 ) -> Result<Child> {
     let manifest = install::manifest(home)?;
     let version_dir = install::version_dir(home, &manifest.minecraft)?;
@@ -62,7 +63,8 @@ pub fn start(
     let mut args = vec![
         format!("-Xmx{heap}G"),
         format!("-Dsubstratum.skin={}", profile.skin),
-        format!("-Dsubstratum.link={link}"),
+        format!("-Dsubstratum.link={}", link.port),
+        format!("-Dsubstratum.key={}", link.secret),
     ];
     if let Some(logging) = &version.logging {
         let config = inside(&assets.join("log_configs"), &logging.client.file.id)?;

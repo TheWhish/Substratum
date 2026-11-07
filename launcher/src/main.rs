@@ -11,6 +11,7 @@ mod skin;
 mod team;
 #[cfg(test)]
 mod translations;
+mod update;
 mod vhs;
 
 use std::cell::RefCell;
@@ -23,6 +24,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use fetch::{Error, Progress};
+use install::Ready;
 use profile::Profile;
 use settings::{AfterLaunch, Language, Settings, Window};
 use skin::{PRESETS, Skin};
@@ -38,6 +40,7 @@ const SPEED_WINDOW: Duration = Duration::from_secs(1);
 const FALLBACK_MEMORY: u32 = 4;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    update::tidy();
     let home: Rc<Path> = install::home().ok_or("APPDATA is not set")?.into();
     let profile = Rc::new(RefCell::new(load_profile(&home)?));
     let settings = Rc::new(RefCell::new(load_settings(&home)));
@@ -79,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let weak = app.as_weak();
-    let (root, player, options, link) = (home.clone(), profile.clone(), settings.clone(), team.link);
+    let (root, player, options, link) = (home.clone(), profile.clone(), settings.clone(), team.link.clone());
     app.on_play(move || {
         let Some(app) = weak.upgrade() else {
             return Launch::Failed;
@@ -89,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Launch::Nick;
         }
         let options = *options.borrow();
-        match launch::start(&root, &profile, &options, options.heap(total), link) {
+        match launch::start(&root, &profile, &options, options.heap(total), &link) {
             Ok(game) => {
                 if options.after_launch == AfterLaunch::Minimize {
                     app.window().set_minimized(true);
@@ -171,11 +174,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if finished && let Some(job) = job.borrow_mut().take() {
             app.set_busy(false);
             match job.worker.join() {
-                Ok(Ok(build)) => {
+                Ok(Ok(Ready::Build(build))) => {
                     app.set_build(build.into());
                     commands.send(team::Command::Profile(team_profile(&app, &player.borrow())));
                     app.invoke_finished(Outcome::Done);
                 }
+                Ok(Ok(Ready::Launcher(fresh))) => match update::apply(&fresh) {
+                    Ok(()) => quit(),
+                    Err(error) => {
+                        eprintln!("failed to replace the launcher: {error}");
+                        app.invoke_finished(Outcome::Failed);
+                    }
+                },
                 Ok(Err(Error::Cancelled)) => app.invoke_finished(Outcome::Cancelled),
                 Ok(Err(error)) => {
                     eprintln!("installation failed: {error}");
@@ -186,9 +196,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    check_updates(home.to_path_buf(), app.as_weak());
     app.show()?;
     slint::run_event_loop_until_quit()?;
     Ok(())
+}
+
+fn check_updates(home: PathBuf, weak: Weak<AppWindow>) {
+    thread::spawn(move || match install::pending(&home) {
+        Ok(false) => {}
+        Ok(true) => {
+            let started = slint::invoke_from_event_loop(move || {
+                if let Some(app) = weak.upgrade()
+                    && !app.get_playing()
+                {
+                    app.invoke_install();
+                }
+            });
+            if let Err(error) = started {
+                eprintln!("failed to start the update: {error}");
+            }
+        }
+        Err(error) => eprintln!("update check failed: {error}"),
+    });
 }
 
 fn load_profile(home: &Path) -> fetch::Result<Profile> {
@@ -489,7 +519,7 @@ fn reveal(path: &Path) -> bool {
 
 struct Job {
     progress: Arc<Progress>,
-    worker: JoinHandle<fetch::Result<String>>,
+    worker: JoinHandle<fetch::Result<Ready>>,
     sampled: Instant,
     received: u64,
 }

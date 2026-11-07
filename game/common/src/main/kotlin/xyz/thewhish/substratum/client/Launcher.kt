@@ -6,7 +6,8 @@ object Launcher {
     val skin: String? = System.getProperty("substratum.skin")
 
     fun require() {
-        check(skin != null || Platform.isDevelopmentEnvironment()) {
+        val linked = Link.start()
+        check(Platform.isDevelopmentEnvironment() || (skin != null && linked)) {
             "Substratum starts only from the Substratum launcher"
         }
     }

@@ -3,7 +3,7 @@ name = "substratum-backend"
 version = "0.1.0"
 edition = "2024"
 description = "Team service for Substratum: codes, presence, start and traffic relay"
-license = "MIT"
+license-file = "../LICENSE"
 publish = false
 
 [profile.release]

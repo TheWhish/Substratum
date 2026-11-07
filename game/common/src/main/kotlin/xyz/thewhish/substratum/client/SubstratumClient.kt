@@ -33,7 +33,6 @@ object SubstratumClient {
 
     fun init() {
         Launcher.require()
-        Link.start()
         Menus.init()
         ClientTickEvent.CLIENT_POST.register(Lobby::tick)
         ColorHandlerRegistry.registerBlockColors({ _, level, pos, tintIndex -> hostTint(level, pos, tintIndex) }, ModBlocks.RIFT_CUT)

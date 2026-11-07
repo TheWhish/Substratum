@@ -9,6 +9,7 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.io.Writer
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.Socket
 import kotlin.concurrent.thread
 
@@ -45,6 +46,7 @@ object Link {
     const val MENU = "menu"
     const val READY = "ready"
     const val PLAYING = "playing"
+    private const val GREETING_TIMEOUT = 5000
 
     private val gson = Gson()
     private var writer: Writer? = null
@@ -60,9 +62,29 @@ object Link {
     var changes = 0
         private set
 
-    fun start() {
-        val port = System.getProperty("substratum.link")?.toIntOrNull() ?: return
-        thread(isDaemon = true, name = "substratum-link") { listen(port) }
+    fun start(): Boolean {
+        val port = System.getProperty("substratum.link")?.toIntOrNull() ?: return false
+        val key = System.getProperty("substratum.key") ?: return false
+        val socket = Socket()
+        try {
+            socket.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), port), GREETING_TIMEOUT)
+            socket.tcpNoDelay = true
+            socket.soTimeout = GREETING_TIMEOUT
+            val writer = OutputStreamWriter(socket.getOutputStream(), Charsets.UTF_8)
+            val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
+            writer.write(gson.toJson(mapOf("type" to "hello", "key" to key)))
+            writer.write("\n")
+            writer.flush()
+            receive(reader.readLine() ?: throw IOException("The launcher refused the link"))
+            socket.soTimeout = 0
+            synchronized(this) { this.writer = writer }
+            thread(isDaemon = true, name = "substratum-link") { listen(socket, reader) }
+            return true
+        } catch (error: IOException) {
+            Substratum.LOGGER.error("Failed to reach the launcher", error)
+            socket.close()
+            return false
+        }
     }
 
     fun presence(value: String) = send(mapOf("type" to "presence", "presence" to value))
@@ -79,14 +101,9 @@ object Link {
         return team.session.takeIf { team.host == state.me }
     }
 
-    private fun listen(port: Int) {
+    private fun listen(socket: Socket, reader: BufferedReader) {
         try {
-            Socket(InetAddress.getLoopbackAddress(), port).use { socket ->
-                socket.tcpNoDelay = true
-                synchronized(this) { writer = OutputStreamWriter(socket.getOutputStream(), Charsets.UTF_8) }
-                val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
-                while (true) receive(reader.readLine() ?: break)
-            }
+            socket.use { while (true) receive(reader.readLine() ?: break) }
         } catch (error: IOException) {
             Substratum.LOGGER.error("Lost the link to the launcher", error)
         } finally {

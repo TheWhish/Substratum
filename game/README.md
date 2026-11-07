@@ -66,4 +66,4 @@ Immersive Portals 6.1.0 уже вложен в jar мода, ставить ег
 
 ## Лицензия
 
-Код мода под [MIT](../LICENSE). Immersive Portals распространяется под Apache-2.0.
+Исходный код открыт только для чтения: [Substratum Source-Available License](../LICENSE). Мод работает только в составе сборки через официальный лаунчер, распространять его отдельно нельзя. Immersive Portals распространяется под Apache-2.0.

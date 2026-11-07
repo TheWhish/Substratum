@@ -8,6 +8,7 @@ use serde::de::DeserializeOwned;
 use ureq::Agent;
 
 use crate::fetch::{self, Download, Error, Hash, Progress, Result, inside, io_error};
+use crate::update;
 
 const MANIFEST_URL: &str =
     "https://github.com/TheWhish/Substratum/releases/latest/download/manifest.json";
@@ -25,7 +26,22 @@ pub struct Manifest {
     pub build: String,
     pub minecraft: String,
     pub fabric: String,
+    #[serde(default)]
+    launcher: Option<Release>,
     mods: Vec<Mod>,
+}
+
+#[derive(Deserialize)]
+pub struct Release {
+    pub version: String,
+    pub url: String,
+    pub size: u64,
+    pub sha256: String,
+}
+
+pub enum Ready {
+    Build(String),
+    Launcher(PathBuf),
 }
 
 impl Manifest {
@@ -284,12 +300,19 @@ pub fn load<T: DeserializeOwned>(path: &Path) -> Result<T> {
     parse(&bytes, &path.display().to_string())
 }
 
-pub fn run(home: &Path, progress: &Progress) -> Result<String> {
+pub fn pending(home: &Path) -> Result<bool> {
+    let (_, manifest) = latest(&fetch::agent())?;
+    let launcher = manifest.launcher.as_ref().is_some_and(update::outdated);
+    let build = installed(home).is_some_and(|build| build != manifest.build);
+    Ok(launcher || build)
+}
+
+pub fn run(home: &Path, progress: &Progress) -> Result<Ready> {
     let agent = fetch::agent();
-    let manifest_url =
-        std::env::var("SUBSTRATUM_MANIFEST").unwrap_or_else(|_| MANIFEST_URL.to_owned());
-    let manifest_bytes = fetch::bytes(&agent, &manifest_url, None)?;
-    let manifest: Manifest = parse(&manifest_bytes, &manifest_url)?;
+    let (manifest_bytes, manifest) = latest(&agent)?;
+    if let Some(release) = manifest.launcher.as_ref().filter(|release| update::outdated(release)) {
+        return update::download(&agent, release, progress).map(Ready::Launcher);
+    }
 
     let mut downloads = minecraft(&agent, home, &manifest.minecraft)?;
     downloads.extend(fabric(&agent, home, &manifest)?);
@@ -298,7 +321,14 @@ pub fn run(home: &Path, progress: &Progress) -> Result<String> {
 
     prune_mods(home, &manifest.mods)?;
     save(&home.join(BUILD_FILE), &manifest_bytes)?;
-    Ok(manifest.build)
+    Ok(Ready::Build(manifest.build))
+}
+
+fn latest(agent: &Agent) -> Result<(Vec<u8>, Manifest)> {
+    let url = std::env::var("SUBSTRATUM_MANIFEST").unwrap_or_else(|_| MANIFEST_URL.to_owned());
+    let bytes = fetch::bytes(agent, &url, None)?;
+    let manifest = parse(&bytes, &url)?;
+    Ok((bytes, manifest))
 }
 
 fn minecraft(agent: &Agent, home: &Path, id: &str) -> Result<Vec<Download>> {
@@ -589,7 +619,9 @@ mod tests {
         let home = std::env::temp_dir().join("substratum-install-test");
         let install = || {
             let progress = Progress::default();
-            let build = run(&home, &progress).unwrap();
+            let Ready::Build(build) = run(&home, &progress).unwrap() else {
+                panic!("a debug build never replaces the launcher");
+            };
             assert_eq!(installed(&home).as_deref(), Some(build.as_str()));
             progress.received.load(Ordering::Relaxed)
         };

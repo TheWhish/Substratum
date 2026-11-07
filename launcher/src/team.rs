@@ -12,7 +12,7 @@ use substratum_protocol::{
     BEACON_PORT, CONTROL_PATH, Presence, RELAY_CHUNK, RELAY_PATH, Refusal, Relay, Team, ToClient,
     ToServer, hello_message, hex, unhex,
 };
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::watch;
@@ -29,6 +29,7 @@ const IDLE: Duration = Duration::from_secs(60);
 const LINE_LIMIT: u64 = 64 * 1024;
 const BEACON_EVERY: Duration = Duration::from_secs(15);
 const ROUTE_WAIT: Duration = Duration::from_secs(5);
+const GREETING_WAIT: Duration = Duration::from_secs(5);
 
 type Failure = Box<dyn Error + Send + Sync>;
 
@@ -49,8 +50,14 @@ pub struct Update {
 
 #[derive(Clone)]
 pub struct Handle {
-    pub link: u16,
+    pub link: GameLink,
     commands: UnboundedSender<Event>,
+}
+
+#[derive(Clone)]
+pub struct GameLink {
+    pub port: u16,
+    pub secret: String,
 }
 
 impl Handle {
@@ -62,6 +69,7 @@ impl Handle {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum FromGame {
+    Hello { key: String },
     Presence { presence: Presence },
     Start,
     Opened { port: u16 },
@@ -114,6 +122,10 @@ pub fn start(
     let link = std::net::TcpListener::bind(("127.0.0.1", 0))?;
     link.set_nonblocking(true)?;
     let port = link.local_addr()?.port();
+    let mut bytes = [0; 32];
+    getrandom::fill(&mut bytes).map_err(std::io::Error::other)?;
+    let secret = hex(&bytes);
+    let expected = secret.clone();
     let url = std::env::var("SUBSTRATUM_BACKEND").unwrap_or_else(|_| BACKEND.to_owned());
     let (events, inbox) = unbounded_channel();
     let commands = events.clone();
@@ -127,7 +139,7 @@ pub fn start(
                 let profile = Arc::new(Mutex::new(profile));
                 match TcpListener::from_std(link) {
                     Ok(link) => {
-                        tokio::spawn(serve_game(link, events.clone()));
+                        tokio::spawn(serve_game(link, expected, events.clone()));
                     }
                     Err(error) => eprintln!("game link is unavailable: {error}"),
                 }
@@ -148,7 +160,7 @@ pub fn start(
             })
         })?;
     Ok(Handle {
-        link: port,
+        link: GameLink { port, secret },
         commands,
     })
 }
@@ -270,6 +282,7 @@ impl Core {
 
     fn on_game(&mut self, message: FromGame) {
         match message {
+            FromGame::Hello { .. } => {}
             FromGame::Presence { presence } => {
                 self.presence = presence;
                 self.tell(ToServer::Presence { presence });
@@ -525,7 +538,7 @@ where
     Ok(None)
 }
 
-async fn serve_game(listener: TcpListener, events: UnboundedSender<Event>) {
+async fn serve_game(listener: TcpListener, secret: String, events: UnboundedSender<Event>) {
     loop {
         let socket = match listener.accept().await {
             Ok((socket, _)) => socket,
@@ -535,6 +548,15 @@ async fn serve_game(listener: TcpListener, events: UnboundedSender<Event>) {
             }
         };
         let (reader, mut writer) = socket.into_split();
+        let mut reader = BufReader::new(reader);
+        let mut line = String::new();
+        let greeting = tokio::time::timeout(GREETING_WAIT, read_line(&mut reader, &mut line)).await;
+        let greeted = matches!(greeting, Ok(Ok(true)))
+            && matches!(serde_json::from_str(&line), Ok(FromGame::Hello { key }) if key == secret);
+        if !greeted {
+            eprintln!("refused a game link without the launcher key");
+            continue;
+        }
         let (outbox, mut inbox) = unbounded_channel::<String>();
         if events.send(Event::GameConnected(outbox)).is_err() {
             return;
@@ -547,21 +569,14 @@ async fn serve_game(listener: TcpListener, events: UnboundedSender<Event>) {
             }
         };
         let reading = async {
-            let mut reader = BufReader::new(reader);
-            let mut line = String::new();
-            loop {
-                line.clear();
-                match (&mut reader).take(LINE_LIMIT).read_line(&mut line).await {
-                    Ok(0) | Err(_) => return,
-                    Ok(_) if !line.ends_with('\n') => return,
-                    Ok(_) => match serde_json::from_str::<FromGame>(&line) {
-                        Ok(message) => {
-                            if events.send(Event::Game(message)).is_err() {
-                                return;
-                            }
+            while let Ok(true) = read_line(&mut reader, &mut line).await {
+                match serde_json::from_str::<FromGame>(&line) {
+                    Ok(message) => {
+                        if events.send(Event::Game(message)).is_err() {
+                            return;
                         }
-                        Err(error) => eprintln!("unreadable message from the game: {error}"),
-                    },
+                    }
+                    Err(error) => eprintln!("unreadable message from the game: {error}"),
                 }
             }
         };
@@ -573,6 +588,12 @@ async fn serve_game(listener: TcpListener, events: UnboundedSender<Event>) {
             return;
         }
     }
+}
+
+async fn read_line<R: AsyncBufRead + Unpin>(reader: &mut R, line: &mut String) -> std::io::Result<bool> {
+    line.clear();
+    let read = (&mut *reader).take(LINE_LIMIT).read_line(line).await?;
+    Ok(read > 0 && line.ends_with('\n'))
 }
 
 async fn serve_door(
@@ -722,12 +743,14 @@ mod tests {
     }
 
     impl Game {
-        async fn attach(link: u16) -> Game {
-            let (reader, writer) = TcpStream::connect(("127.0.0.1", link)).await.unwrap().into_split();
-            Game {
+        async fn attach(link: &GameLink) -> Game {
+            let (reader, writer) = TcpStream::connect(("127.0.0.1", link.port)).await.unwrap().into_split();
+            let mut game = Game {
                 lines: BufReader::new(reader).lines(),
                 writer,
-            }
+            };
+            game.say(&format!(r#"{{"type":"hello","key":"{}"}}"#, link.secret)).await;
+            game
         }
 
         async fn say(&mut self, line: &str) {
@@ -779,8 +802,14 @@ mod tests {
             }
         };
         while guest_updates.recv().await.unwrap().team.is_none() {}
-        let mut host_game = Game::attach(host.link).await;
-        let mut guest_game = Game::attach(guest.link).await;
+        let stranger = GameLink {
+            port: host.link.port,
+            secret: "forged".into(),
+        };
+        let mut intruder = Game::attach(&stranger).await;
+        assert!(intruder.lines.next_line().await.unwrap().is_none());
+        let mut host_game = Game::attach(&host.link).await;
+        let mut guest_game = Game::attach(&guest.link).await;
         guest.send(Command::Join(code));
         host_game.say(r#"{"type":"presence","presence":"menu"}"#).await;
         guest_game.say(r#"{"type":"presence","presence":"ready"}"#).await;
