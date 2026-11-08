@@ -18,9 +18,13 @@
     "BackroomsLightMixin",
     "BenchFrameMixin",
     "ClientLightOrderMixin",
+    "DebugKeysMixin",
+    "DebugOverlayMixin",
+    "DropStackMixin",
     "EntityLightMixin",
     "FogMixin",
     "FovMixin",
+    "HudMixin",
     "LocalSkinMixin",
     "LoopbackHostMixin",
     "MenuBackgroundMixin",
@@ -28,11 +32,12 @@
     "MenuMusicMixin",
     "ReplayPositionMixin",
     "SceneDepthMixin",
-    "SecureChatToastMixin",
+    "ScreenGateMixin",
     "SkyBlackoutMixin",
     "SuitAnimationMixin",
     "SuitModelMixin",
-    "SuitRendererMixin"
+    "SuitRendererMixin",
+    "ToastMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }

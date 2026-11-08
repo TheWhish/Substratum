@@ -51,6 +51,7 @@ object LevelRules {
                 EventResult.pass()
             }
         }
+        LifecycleEvent.SERVER_STARTED.register(::applyGameRules)
         TickEvent.SERVER_POST.register(::tickReducedDebug)
         PlayerEvent.PLAYER_JOIN.register(::resyncReducedDebug)
         PlayerEvent.PLAYER_RESPAWN.register { player, _, _ -> resyncReducedDebug(player) }
@@ -60,6 +61,14 @@ object LevelRules {
             reducedDebug.clear()
             reducedGlobal = null
         }
+    }
+
+    private fun applyGameRules(server: MinecraftServer) {
+        val rules = server.gameRules
+        rules.getRule(GameRules.RULE_SPAWN_CHUNK_RADIUS).set(0, server)
+        rules.getRule(GameRules.RULE_DO_IMMEDIATE_RESPAWN).set(true, server)
+        rules.getRule(GameRules.RULE_SHOWDEATHMESSAGES).set(false, server)
+        rules.getRule(GameRules.RULE_ANNOUNCE_ADVANCEMENTS).set(false, server)
     }
 
     private fun tickReducedDebug(server: MinecraftServer) {
