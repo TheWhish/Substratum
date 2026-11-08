@@ -10,13 +10,10 @@ import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.util.RandomSource
 import net.minecraft.world.entity.Entity
-import net.minecraft.world.level.Level
 import net.minecraft.world.phys.Vec3
 import qouteall.imm_ptl.core.api.PortalAPI
 import qouteall.imm_ptl.core.chunk_loading.ChunkLoader
 import qouteall.imm_ptl.core.portal.Portal
-import xyz.thewhish.substratum.rift.ExitSpawner
-import xyz.thewhish.substratum.rift.PitPortals
 import xyz.thewhish.substratum.worldgen.MazeChunkGenerator
 import xyz.thewhish.substratum.worldgen.MazeLayout
 import java.util.UUID
@@ -32,7 +29,6 @@ object PitExitGuard {
     private const val DROP_SEARCH_CELLS = 8
 
     private const val PORTAL_CLEARANCE = 2
-    private const val SKY_HEIGHT = 300
 
     private const val PRELOAD_RADIUS = 2
     private const val RACE_WINDOW_TICKS = 20 * 10L
@@ -68,7 +64,7 @@ object PitExitGuard {
             hole[1] + MazeLayout.PIT_HOLE / 2
         )
         armed.add(player.uuid)
-        val portal = PitPortals.at(level, center) ?: openPortal(level, generator, player, hole, center) ?: return
+        val portal = PitPortals.at(level, center) ?: openPortal(level, generator, center) ?: return
         val destination = portal.destPos
         val loader = ChunkLoader(
             portal.destDim,
@@ -129,32 +125,10 @@ object PitExitGuard {
         all.forEach(::end)
     }
 
-    private fun openPortal(
-        level: ServerLevel,
-        generator: MazeChunkGenerator,
-        player: ServerPlayer,
-        hole: IntArray,
-        center: BlockPos
-    ): Portal? {
-        val exit = generator.pitHoleIsExit(hole[0], hole[1])
+    private fun openPortal(level: ServerLevel, generator: MazeChunkGenerator, center: BlockPos): Portal? {
         val raced = races[center]?.takeIf { it.until > level.server.tickCount }?.destination
-        val destination = raced ?: if (exit) exitTarget(player, level.random) else {
-            teleportTarget(generator, level.random, center.x, center.z)
-        }
-        if (destination == null) {
-            if (exit) ExitSpawner.schedule(level.server, player)
-            return null
-        }
-        return if (exit) {
-            PitPortals.open(level, center, Level.OVERWORLD, destination, PitPortals.EXIT_TAG)
-        } else {
-            PitPortals.open(level, center, SubstratumLevels.LEVEL_0, destination, PitPortals.TELEPORT_TAG)
-        }
-    }
-
-    private fun exitTarget(player: ServerPlayer, random: RandomSource): Vec3? {
-        val target = Homecoming.target(player, random) ?: return null
-        return Vec3(target.x + 0.5, target.y + SKY_HEIGHT + 0.5, target.z + 0.5)
+        val destination = raced ?: teleportTarget(generator, level.random, center.x, center.z) ?: return null
+        return PitPortals.open(level, center, SubstratumLevels.LEVEL_0, destination)
     }
 
     private fun teleportTarget(generator: MazeChunkGenerator, random: RandomSource, x: Int, z: Int): Vec3? {

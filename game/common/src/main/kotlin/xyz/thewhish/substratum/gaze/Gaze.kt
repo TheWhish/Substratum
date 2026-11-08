@@ -2,7 +2,6 @@ package xyz.thewhish.substratum.gaze
 
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet
 import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.ClipContext
@@ -30,7 +29,6 @@ class Gaze(
     val layout: MazeLayout?,
     val viewers: List<Viewer>,
     private val world: ServerLevel? = null,
-    val cuts: Set<Long> = emptySet(),
 ) {
 
     class Lamp(val x: Int, val z: Int, val point: Vec3, val glow: Double, val sick: Boolean)
@@ -67,7 +65,6 @@ class Gaze(
     private val stripZ = DoubleArray(2)
     private val peeked = HashMap<Viewer, Long2ByteOpenHashMap>()
     private val walled = HashMap<Viewer, Long2ByteOpenHashMap>()
-    private val cutSet = LongOpenHashSet(cuts)
     private var mergedFrom = DoubleArray(SHADOWS)
     private var mergedTo = DoubleArray(SHADOWS)
     private var merged = 0
@@ -101,7 +98,7 @@ class Gaze(
         var nextX = if (dx == 0.0) Double.POSITIVE_INFINITY else (if (dx > 0) cellX + 1 - from.x else from.x - cellX) * spanX
         var nextZ = if (dz == 0.0) Double.POSITIVE_INFINITY else (if (dz > 0) cellZ + 1 - from.z else from.z - cellZ) * spanZ
         while (true) {
-            if (column(cellX, cellZ) and MazeLayout.SOLID != 0 && !cut(cellX, cellZ)) return true
+            if (column(cellX, cellZ) and MazeLayout.SOLID != 0) return true
             if (cellX == endX && cellZ == endZ) return false
             if (nextX >= 1.0 && nextZ >= 1.0) return false
             if (nextX <= nextZ) {
@@ -113,8 +110,6 @@ class Gaze(
             }
         }
     }
-
-    private fun cut(x: Int, z: Int): Boolean = !cutSet.isEmpty() && cutSet.contains(key(x, z))
 
     fun viewer(uuid: UUID): Viewer? = viewers.firstOrNull { it.uuid == uuid && it.window == null }
 
@@ -147,7 +142,7 @@ class Gaze(
         var enter = 0.0
         while (true) {
             val leave = min(min(nextX, nextZ), 1.0)
-            if (!open(column(cellX, cellZ), cut(cellX, cellZ), from.y + dy * enter, from.y + dy * leave)) return enter
+            if (!open(column(cellX, cellZ), from.y + dy * enter, from.y + dy * leave)) return enter
             if (leave >= 1.0) return 1.0
             enter = leave
             if (nextX <= nextZ) {
@@ -192,8 +187,8 @@ class Gaze(
         val points = ArrayList<Vec3>()
         for (x in min(x0, x1)..max(x0, x1) step stride) for (z in min(z0, z1)..max(z0, z1) step stride) {
             val column = column(x, z)
-            if (column and MazeLayout.SOLID != 0 && !cut(x, z)) continue
-            val ceiling = if (column and MazeLayout.SOLID != 0) CUT_CEILING else MazeLayout.ceilingOf(column).toDouble()
+            if (column and MazeLayout.SOLID != 0) continue
+            val ceiling = MazeLayout.ceilingOf(column).toDouble()
             for (y in doubleArrayOf(FLOOR + SKIN, FLOOR + EYE, ceiling - SKIN)) points.add(Vec3(x + 0.5, y, z + 0.5))
         }
         return Patch(points)
@@ -263,7 +258,7 @@ class Gaze(
         for (x in floor(triangleX.min()).toInt()..floor(triangleX.max()).toInt()) {
             if (!strip(x)) continue
             for (z in floor(stripZ[0]).toInt()..floor(stripZ[1]).toInt()) {
-                if (column(x, z) and MazeLayout.SOLID == 0 || cut(x, z)) continue
+                if (column(x, z) and MazeLayout.SOLID == 0) continue
                 for (corner in 0 until 4) {
                     val offX = x + CORNER_X[corner] - point.x
                     val offZ = z + CORNER_Z[corner] - point.z
@@ -404,7 +399,6 @@ class Gaze(
         const val EYE = 1.62
         const val DARK_SIGHT = 8.0
         const val NOTICED = 0.1
-        const val CUT_CEILING = FLOOR + 2.0
         private const val SKIN = 0.1
         private const val CLIMB = 1.25
         private const val NEAR = 1.0e-6
@@ -429,10 +423,10 @@ class Gaze(
 
         fun key(x: Int, z: Int): Long = (x.toLong() shl 32) or (z.toLong() and 0xFFFF_FFFFL)
 
-        fun open(column: Int, cut: Boolean, y0: Double, y1: Double): Boolean {
+        fun open(column: Int, y0: Double, y1: Double): Boolean {
             val low = min(y0, y1)
             val high = max(y0, y1)
-            if (column and MazeLayout.SOLID != 0) return cut && low >= FLOOR && high < CUT_CEILING
+            if (column and MazeLayout.SOLID != 0) return false
             if (high >= MazeLayout.ceilingOf(column)) return false
             return low >= FLOOR || column and MazeLayout.PIT != 0
         }

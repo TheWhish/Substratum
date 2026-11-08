@@ -26,14 +26,6 @@ class MazeLayout(val seed: Long) {
 
         const val CEILING_TIGHT = 5
 
-        const val CRAWL_MIN = 1
-        const val CRAWL_MAX = 1
-
-        private const val CRAWL_PROBE = 8
-
-        private val STEP_X = intArrayOf(0, 1, 0, -1)
-        private val STEP_Z = intArrayOf(-1, 0, 1, 0)
-
         fun ceilingOf(flags: Int): Int = (flags ushr 4) and 0xF
 
         fun topOf(flags: Int): Int = (flags ushr 8) and 0xF
@@ -42,11 +34,6 @@ class MazeLayout(val seed: Long) {
         private const val SALT_ANOMALY = 0x3A17
         private const val SALT_SOAK = 0x7B29
         private const val SALT_LEAK = 0x2D63
-        private const val SALT_PIT_EXIT_HOLE = 0x1C8E
-
-        private const val SALT_PIT_HOLE_ROLE = 0x6B03
-
-        private const val PIT_HOLE_EXIT_ODDS = 0x5555
 
         private const val ROOM_EMPTY = 0
         private const val ROOM_PILLARS = 1
@@ -347,47 +334,6 @@ class MazeLayout(val seed: Long) {
         return true
     }
 
-    fun crawlspace(x: Int, z: Int, alongX: Boolean?): IntArray? {
-        for (r in 0..CRAWL_PROBE) {
-            for (dx in -r..r) {
-                for (dz in -r..r) {
-                    if (maxOf(abs(dx), abs(dz)) != r) continue
-                    if (!standable(x + dx, z + dz)) continue
-                    for (d in 0 until 4) {
-                        val ax = STEP_X[d]
-                        val az = STEP_Z[d]
-                        if (alongX != null && (ax != 0) != alongX) continue
-                        for (length in CRAWL_MAX downTo CRAWL_MIN) {
-                            if (!encloses(x + dx, z + dz, ax, az, length)) continue
-                            return intArrayOf(x + dx, z + dz, ax, az, length)
-                        }
-                    }
-                }
-            }
-        }
-        return null
-    }
-
-    private fun encloses(mouthX: Int, mouthZ: Int, ax: Int, az: Int, length: Int): Boolean {
-        if (!solid(mouthX + ax * (length + 1), mouthZ + az * (length + 1))) return false
-        val pz = -ax
-        for (i in 1..length) {
-            val cx = mouthX + ax * i
-            val cz = mouthZ + az * i
-            if (!solid(cx, cz)) return false
-            if (!solid(cx + az, cz + pz)) return false
-            if (!solid(cx - az, cz - pz)) return false
-        }
-        return true
-    }
-
-    private fun solid(x: Int, z: Int): Boolean = columnAt(x, z) and SOLID != 0
-
-    private fun standable(x: Int, z: Int): Boolean {
-        val flags = columnAt(x, z)
-        return flags and SOLID == 0 && flags and PIT == 0
-    }
-
     fun connectivity(cellX: Int, cellZ: Int, radius: Int): IntArray {
         val n = radius * 2 + 1
         val component = IntArray(n * n)
@@ -456,76 +402,11 @@ class MazeLayout(val seed: Long) {
     private fun cellPit(cellX: Int, cellZ: Int): Boolean =
         sectorOf(cellX, cellZ).pit[localIndex(cellX, cellZ)]
 
-    private fun pitHallBounds(cellX: Int, cellZ: Int): IntArray? {
-        val sector = sectorOf(cellX, cellZ)
-        if (sector.pitMinX < 0) return null
-        val sectorX = Math.floorDiv(cellX, SECTOR_CELLS)
-        val sectorZ = Math.floorDiv(cellZ, SECTOR_CELLS)
-        val worldMinX = (sectorX * SECTOR_CELLS + sector.pitMinX) * CELL
-        val worldMinZ = (sectorZ * SECTOR_CELLS + sector.pitMinZ) * CELL
-        val worldMaxX = (sectorX * SECTOR_CELLS + sector.pitMaxX) * CELL + CELL - 1
-        val worldMaxZ = (sectorZ * SECTOR_CELLS + sector.pitMaxZ) * CELL + CELL - 1
-        return intArrayOf(worldMinX, worldMinZ, worldMaxX, worldMaxZ)
-    }
-
-    private fun holeAnchorsAlong(lo: Int, hi: Int): IntArray {
-        val list = ArrayList<Int>()
-        var anchor = Math.floorDiv(lo, PIT_PITCH) * PIT_PITCH
-        while (anchor <= hi) {
-            if (anchor >= lo && anchor + PIT_HOLE - 1 <= hi) list.add(anchor)
-            anchor += PIT_PITCH
-        }
-        return list.toIntArray()
-    }
-
-    fun pitExitHole(x: Int, z: Int): IntArray? {
-        val bounds = pitHallBounds(Math.floorDiv(x, CELL), Math.floorDiv(z, CELL)) ?: return null
-        val holes = pitHoleAnchors(bounds)
-        if (holes.isEmpty()) return null
-        val holeHash = seedFor(seed, bounds[0], bounds[1], SALT_PIT_EXIT_HOLE)
-        return holes[((holeHash ushr 33) % holes.size).toInt()]
-    }
-
-    fun nearestExit(x: Int, z: Int, radius: Int): IntArray? {
-        val sectorX = Math.floorDiv(Math.floorDiv(x, CELL), SECTOR_CELLS)
-        val sectorZ = Math.floorDiv(Math.floorDiv(z, CELL), SECTOR_CELLS)
-        val span = radius / (CELL * SECTOR_CELLS) + 1
-        var best: IntArray? = null
-        var bestDistance = radius.toLong() * radius
-        for (sx in sectorX - span..sectorX + span) {
-            for (sz in sectorZ - span..sectorZ + span) {
-                val bounds = pitHallBounds(sx * SECTOR_CELLS, sz * SECTOR_CELLS) ?: continue
-                val hole = pitExitHole(bounds[0], bounds[1]) ?: continue
-                val dx = (hole[0] + PIT_HOLE / 2 - x).toLong()
-                val dz = (hole[1] + PIT_HOLE / 2 - z).toLong()
-                val distance = dx * dx + dz * dz
-                if (distance > bestDistance) continue
-                best = hole
-                bestDistance = distance
-            }
-        }
-        return best
-    }
-
-    fun pitHoleIsExit(x: Int, z: Int): Boolean {
-        val exit = pitExitHole(x, z) ?: return false
-        if (x == exit[0] && z == exit[1]) return true
-        return ((seedFor(seed, x, z, SALT_PIT_HOLE_ROLE) ushr 17) and 0xFFFF) < PIT_HOLE_EXIT_ODDS
-    }
-
     fun pitHoleAt(x: Int, z: Int): IntArray? {
         val anchorX = Math.floorDiv(x, PIT_PITCH) * PIT_PITCH
         val anchorZ = Math.floorDiv(z, PIT_PITCH) * PIT_PITCH
         if (x - anchorX >= PIT_HOLE || z - anchorZ >= PIT_HOLE || !isOpenHole(anchorX, anchorZ)) return null
         return intArrayOf(anchorX, anchorZ)
-    }
-
-    private fun pitHoleAnchors(bounds: IntArray): List<IntArray> {
-        val xs = holeAnchorsAlong(bounds[0], bounds[2])
-        val zs = holeAnchorsAlong(bounds[1], bounds[3])
-        val holes = ArrayList<IntArray>()
-        for (x in xs) for (z in zs) if (isOpenHole(x, z)) holes.add(intArrayOf(x, z))
-        return holes
     }
 
     private fun isOpenHole(x: Int, z: Int): Boolean {
@@ -824,10 +705,6 @@ class MazeLayout(val seed: Long) {
         val lamp: BooleanArray,
         val pit: BooleanArray,
         val ceiling: ByteArray,
-        val pitMinX: Int,
-        val pitMinZ: Int,
-        val pitMaxX: Int,
-        val pitMaxZ: Int,
         val dark: BooleanArray,
         val grime: FloatArray,
         val vDoor: ByteArray,
@@ -879,10 +756,8 @@ class MazeLayout(val seed: Long) {
                     lamp[i] = rng.nextFloat() < chance
                 }
 
-                val hall = rooms.firstOrNull { it.feature == ROOM_PIT_FIELD }
                 return Sector(
                     v, h, post, lamp, pit, ceiling,
-                    hall?.minX ?: -1, hall?.minZ ?: -1, hall?.maxX ?: -1, hall?.maxZ ?: -1,
                     dark, grime,
                     vDoor, hDoor, vNiche, hNiche
                 )

@@ -1,4 +1,4 @@
-package xyz.thewhish.substratum.rift
+package xyz.thewhish.substratum.level
 
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
@@ -14,15 +14,14 @@ import xyz.thewhish.substratum.worldgen.MazeLayout
 
 object PitPortals {
 
-    const val EXIT_TAG = "substratum:pit_exit"
-    const val TELEPORT_TAG = "substratum:pit_teleport"
+    private const val TAG = "substratum:pit_teleport"
 
-    fun open(floorLevel: ServerLevel, holeCenter: BlockPos, targetDimension: ResourceKey<Level>, destination: Vec3, tag: String): Portal {
+    fun open(floorLevel: ServerLevel, holeCenter: BlockPos, targetDimension: ResourceKey<Level>, destination: Vec3): Portal {
         val portal = Portal(Portal.ENTITY_TYPE, floorLevel)
         PortalAPI.setPortalOrthodoxShape(portal, Direction.UP, box(holeCenter))
         faceUp(portal)
         PortalAPI.setPortalTransformation(portal, targetDimension, destination, DQuaternion.identity, 1.0)
-        portal.portalTag = tag
+        portal.portalTag = TAG
         portal.setIsVisible(false)
         portal.setInteractable(false)
         portal.setCrossPortalCollisionEnabled(false)
@@ -30,7 +29,7 @@ object PitPortals {
         return portal
     }
 
-    fun isPit(portal: Portal): Boolean = portal.portalTag == EXIT_TAG || portal.portalTag == TELEPORT_TAG
+    fun isPit(portal: Portal): Boolean = portal.portalTag == TAG
 
     fun holeCenter(portal: Portal): BlockPos = BlockPos.containing(portal.originPos).below()
 

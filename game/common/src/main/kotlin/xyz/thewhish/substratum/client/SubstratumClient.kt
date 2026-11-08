@@ -5,17 +5,14 @@ import dev.architectury.event.events.client.ClientPlayerEvent
 import dev.architectury.event.events.client.ClientTickEvent
 import dev.architectury.registry.ReloadListenerRegistry
 import dev.architectury.registry.client.level.entity.EntityRendererRegistry
-import dev.architectury.registry.client.rendering.ColorHandlerRegistry
 import dev.architectury.registry.client.rendering.RenderTypeRegistry
 import net.minecraft.Util
 import net.minecraft.client.CameraType
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.client.renderer.RenderType
-import net.minecraft.core.BlockPos
 import net.minecraft.server.packs.PackType
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener
-import net.minecraft.world.level.BlockAndTintGetter
 import net.minecraft.world.level.Level
 import qouteall.imm_ptl.core.ClientWorldLoader
 import xyz.thewhish.substratum.Substratum
@@ -25,8 +22,6 @@ import xyz.thewhish.substratum.level.SubstratumLevels
 import xyz.thewhish.substratum.network.ViewportSync
 import xyz.thewhish.substratum.registry.ModBlocks
 import xyz.thewhish.substratum.registry.ModEntities
-import xyz.thewhish.substratum.rift.RiftCutBlockEntity
-import xyz.thewhish.substratum.rift.Squeeze
 import xyz.thewhish.substratum.smiler.Smiler
 import xyz.thewhish.substratum.smiler.client.SmilerRenderer
 
@@ -38,11 +33,9 @@ object SubstratumClient {
         Bench.register()
         MenuShot.register()
         ClientTickEvent.CLIENT_POST.register(Lobby::tick)
-        ColorHandlerRegistry.registerBlockColors({ _, level, pos, tintIndex -> hostTint(level, pos, tintIndex) }, ModBlocks.RIFT_CUT)
         RenderTypeRegistry.register(RenderType.cutout(), ModBlocks.ALMOND_WATER.get())
         EntityRendererRegistry.register(ModEntities.SMILER, ::SmilerRenderer)
         ClientTickEvent.CLIENT_LEVEL_POST.register { level ->
-            level.players().forEach(Squeeze::brace)
             reportViewportIfChanged()
             turnSmilers(level)
         }
@@ -71,11 +64,9 @@ object SubstratumClient {
             Lobby.entered(Minecraft.getInstance())
             Backdrop.release()
             forgetReportedViewport()
-            ShaftDarkness.reset()
         }
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register {
             Lobby.left()
-            ShaftDarkness.reset()
             SanityClient.reset()
             Vhs.reset()
             ProbeView.reset()
@@ -150,12 +141,4 @@ object SubstratumClient {
         CameraType.THIRD_PERSON_FRONT -> ViewportSync.Perspective.THIRD_PERSON_FRONT
         else -> ViewportSync.Perspective.THIRD_PERSON_BACK
     }
-
-    private fun hostTint(level: BlockAndTintGetter?, pos: BlockPos?, tintIndex: Int): Int {
-        if (level == null || pos == null) return NO_TINT
-        val host = (level.getBlockEntity(pos) as? RiftCutBlockEntity)?.host ?: return NO_TINT
-        return Minecraft.getInstance().blockColors.getColor(host, level, pos, tintIndex)
-    }
-
-    private const val NO_TINT = -1
 }

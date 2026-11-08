@@ -16,7 +16,6 @@ import net.minecraft.world.phys.Vec3
 import qouteall.imm_ptl.core.portal.Portal
 import xyz.thewhish.substratum.level.SubstratumLevels
 import xyz.thewhish.substratum.network.ViewportSync
-import xyz.thewhish.substratum.rift.RiftLifecycle
 import xyz.thewhish.substratum.worldgen.MazeChunkGenerator
 import xyz.thewhish.substratum.worldgen.MazeLayout
 import java.util.UUID
@@ -64,7 +63,7 @@ object Watch {
     fun gaze(level: ServerLevel): Gaze = snapshots.getOrPut(level.dimension()) {
         val home = own(level)
         val through = level.server.allLevels.flatMap { windows(it, level) }
-        if (through.isEmpty()) home else Gaze(home.layout, home.viewers + through, level, home.cuts)
+        if (through.isEmpty()) home else Gaze(home.layout, home.viewers + through, level)
     }
 
     fun remember(gaze: Gaze, viewer: Viewer, memory: MutableMap<Long, Long>, now: Long) {
@@ -101,8 +100,7 @@ object Watch {
 
     private fun own(level: ServerLevel): Gaze = own.getOrPut(level.dimension()) {
         val layout = if (level.dimension() == SubstratumLevels.LEVEL_0) (level.chunkSource.generator as? MazeChunkGenerator)?.layout else null
-        val cuts = if (layout == null) emptySet() else RiftLifecycle.mazeCuts().mapTo(HashSet()) { Gaze.key(it.x, it.z) }
-        Gaze(layout, level.players().map { viewer(level, layout != null, it) }, level, cuts)
+        Gaze(layout, level.players().map { viewer(level, layout != null, it) }, level)
     }
 
     private fun windows(from: ServerLevel, into: ServerLevel): List<Viewer> {

@@ -6,27 +6,25 @@ import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Block
-import net.minecraft.world.level.block.state.BlockState
 import qouteall.imm_ptl.core.api.PortalAPI
 import qouteall.imm_ptl.core.block_manipulation.BlockManipulationServer
 import qouteall.q_misc_util.my_util.IntBox
-import xyz.thewhish.substratum.rift.RiftCutBlock
 
 object BackroomsGuard {
     fun register() {
         BlockEvent.BREAK.register { level, pos, _, _, _ ->
             val actual = actualLevel(level)
             val state = actual.getBlockState(pos)
-            if (!isProtected(actual, state)) {
+            if (!isProtected(actual)) {
                 resyncRemoteWatchersAfterCrossPortalEdit(actual, pos)
                 return@register EventResult.pass()
             }
             actual.sendBlockUpdated(pos, state, state, Block.UPDATE_ALL)
             EventResult.interruptFalse()
         }
-        BlockEvent.PLACE.register { level, pos, state, _ ->
+        BlockEvent.PLACE.register { level, pos, _, _ ->
             val actual = actualLevel(level)
-            if (isProtected(actual, state)) return@register EventResult.interruptFalse()
+            if (isProtected(actual)) return@register EventResult.interruptFalse()
             resyncRemoteWatchersAfterCrossPortalEdit(actual, pos)
             EventResult.pass()
         }
@@ -42,6 +40,6 @@ object BackroomsGuard {
     fun actualLevel(level: Level): Level =
         BlockManipulationServer.REDIRECT_CONTEXT.get()?.world() ?: level
 
-    fun isProtected(level: Level, state: BlockState): Boolean =
-        level.dimension() == SubstratumLevels.LEVEL_0 || state.block is RiftCutBlock
+    fun isProtected(level: Level): Boolean =
+        level.dimension() == SubstratumLevels.LEVEL_0
 }

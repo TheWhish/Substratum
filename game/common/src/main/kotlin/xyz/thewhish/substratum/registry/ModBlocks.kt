@@ -39,7 +39,6 @@ import xyz.thewhish.substratum.level.AbyssGuard
 import xyz.thewhish.substratum.level.BackroomsGuard
 import xyz.thewhish.substratum.level.LampBursts
 import xyz.thewhish.substratum.level.PitExitGuard
-import xyz.thewhish.substratum.rift.RiftCutBlock
 import kotlin.math.roundToInt
 
 object ModBlocks {
@@ -112,18 +111,6 @@ object ModBlocks {
 
     val CEILING_ANOMALY: RegistrySupplier<Block> = register("ceiling_anomaly") {
         CeilingAnomalyBlock(wall().mapColor(MapColor.TERRACOTTA_YELLOW))
-    }
-
-    val RIFT_CUT: RegistrySupplier<Block> = BLOCKS.register("rift_cut") {
-        RiftCutBlock(
-            BlockBehaviour.Properties.of()
-                .mapColor(MapColor.STONE)
-                .strength(-1.0f, 3600000.0f)
-                .noOcclusion()
-                .noLootTable()
-                .pushReaction(PushReaction.BLOCK)
-                .dynamicShape()
-        )
     }
 
     val SHAFT_FADE: RegistrySupplier<Block> = BLOCKS.register("shaft_fade") {

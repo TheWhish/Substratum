@@ -127,12 +127,6 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
 
     fun findFooting(x: Int, z: Int, radius: Int): IntArray = layout.findFooting(x, z, radius)
 
-    fun crawlspace(x: Int, z: Int, alongX: Boolean?): IntArray? = layout.crawlspace(x, z, alongX)
-
-    fun nearestExit(x: Int, z: Int, radius: Int): IntArray? = layout.nearestExit(x, z, radius)
-
-    fun pitHoleIsExit(x: Int, z: Int): Boolean = layout.pitHoleIsExit(x, z)
-
     fun pitHoleAt(x: Int, z: Int): IntArray? = layout.pitHoleAt(x, z)
 
     fun corridorDrop(x: Int, z: Int, radius: Int): IntArray? = layout.corridorDrop(x, z, radius)

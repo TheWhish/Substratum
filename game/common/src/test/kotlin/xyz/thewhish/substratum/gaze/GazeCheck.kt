@@ -68,22 +68,14 @@ private fun checkCone() {
     println("cone: screen edges, margins and third person agree")
 }
 
-private fun cutsAround(random: Random, at: Vec3): Set<Long> {
-    val cx = floor(at.x).toInt()
-    val cz = floor(at.z).toInt()
-    val walls = ArrayList<Long>()
-    for (x in cx - 30..cx + 30) for (z in cz - 30..cz + 30) if (layout.columnAt(x, z) and MazeLayout.SOLID != 0) walls.add(Gaze.key(x, z))
-    return walls.shuffled(random).take(40).toHashSet()
-}
-
-private fun sampledClear(cuts: Set<Long>, from: Vec3, to: Vec3): Boolean {
+private fun sampledClear(from: Vec3, to: Vec3): Boolean {
     val steps = (from.distanceTo(to) / SAMPLE_STEP).toInt() + 1
     return (0..steps).all { i ->
         val p = from.lerp(to, i.toDouble() / steps)
         val x = floor(p.x).toInt()
         val z = floor(p.z).toInt()
         val column = layout.columnAt(x, z)
-        if (column and MazeLayout.SOLID != 0) return@all Gaze.key(x, z) in cuts && p.y >= Gaze.FLOOR && p.y < Gaze.CUT_CEILING
+        if (column and MazeLayout.SOLID != 0) return@all false
         p.y < MazeLayout.ceilingOf(column) && (p.y >= Gaze.FLOOR || column and MazeLayout.PIT != 0)
     }
 }
@@ -93,19 +85,16 @@ private fun checkRays() {
     var clear = 0
     var grazed = 0
     var asymmetric = 0
-    var throughCuts = 0
     var underLow = 0
     repeat(PAIRS) {
         val from = Vec3(random.nextDouble(-200.0, 200.0), random.nextDouble(2.1, 4.4), random.nextDouble(-200.0, 200.0))
         val to = from.add(Vec3(random.nextDouble(-1.0, 1.0), 0.0, random.nextDouble(-1.0, 1.0)).normalize().scale(random.nextDouble(1.0, 40.0)))
             .let { Vec3(it.x, random.nextDouble(2.1, 4.4), it.z) }
-        val cuts = if (it % 4 == 0) cutsAround(random, from) else emptySet()
-        val gaze = Gaze(layout, emptyList(), cuts = cuts)
+        val gaze = Gaze(layout, emptyList())
         val traced = gaze.clear(from, to)
-        val sampled = sampledClear(cuts, from, to)
+        val sampled = sampledClear(from, to)
         check(!traced || sampled) { "ray $from -> $to passes a wall the samples hit" }
         if (traced) clear++
-        if (traced && cuts.isNotEmpty() && !Gaze(layout, emptyList()).clear(from, to)) throughCuts++
         if (traced && max(from.y, to.y) > MazeLayout.CEILING_TIGHT - 1) underLow++
         if (!traced && sampled) grazed++
         if (traced != gaze.clear(to, from)) asymmetric++
@@ -113,9 +102,8 @@ private fun checkRays() {
     check(clear in PAIRS / 10..PAIRS * 9 / 10) { "only $clear of $PAIRS rays are clear, the sample area is degenerate" }
     check(grazed * 100 < PAIRS) { "$grazed rays blocked without a sampled wall" }
     check(asymmetric * 1000 < PAIRS) { "$asymmetric rays differ by direction" }
-    check(throughCuts > 0) { "no ray ever passed a rift cut" }
     check(!Gaze(layout, emptyList()).clear(Vec3(0.5, 3.0, 0.5), Vec3(0.5, 40.0, 0.5))) { "a ray through the ceiling is clear" }
-    println("rays: $clear/$PAIRS clear, $throughCuts through rift cuts, $underLow near low ceilings, $grazed grazing, $asymmetric asymmetric")
+    println("rays: $clear/$PAIRS clear, $underLow near low ceilings, $grazed grazing, $asymmetric asymmetric")
 }
 
 private fun checkTurns() {

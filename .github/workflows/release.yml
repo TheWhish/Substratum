@@ -104,4 +104,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$env:GITHUB_REF_NAME" dist/* --title "Substratum $env:VERSION (launcher $env:LAUNCHER_VERSION)" --notes-file .github/release-notes.md --latest
+          gh release create "$env:GITHUB_REF_NAME" dist/* --title "Substratum $env:VERSION (Launcher $env:LAUNCHER_VERSION)" --notes-file .github/release-notes.md --latest

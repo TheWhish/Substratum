@@ -12,9 +12,7 @@ fun main(args: Array<String>) {
         checkCellConnectivity(layout, seed)
         checkNoSealedPockets(layout, seed)
         checkFooting(layout, seed)
-        checkCrawlspace(layout, seed, tally)
         checkCorridorDrops(layout, seed, tally)
-        checkNearestExit(layout, seed)
         checkNoSeamGrid(layout, seed)
         checkShape(layout, seed, tally)
         countCorridorDetail(layout, tally)
@@ -44,12 +42,6 @@ fun main(args: Array<String>) {
     }
     val dropHit = tally.dropHits.toDouble() / tally.dropTries
     check(dropHit > 0.95) { "only ${dropHit.pct()}% of teleport anchors found a corridor to fall into" }
-    val crawlHit = tally.crawlHits.toDouble() / tally.crawlTries
-    check(crawlHit > 0.5) { "only ${crawlHit.pct()}% of footings can host a crawlspace — rifts have nowhere to open" }
-    val crawlAxisHit = tally.crawlAxisHits.toDouble() / tally.crawlAxisTries
-    check(crawlAxisHit > 0.5) {
-        "only ${crawlAxisHit.pct()}% of footings can host a crawlspace on a named axis — half the rifts have nowhere to arrive"
-    }
     val pitShare = tally.pits.toDouble() / (SEEDS * (WINDOW - 2) * (WINDOW - 2))
     check(pitShare in 0.002..0.06) { "floor holes are ${pitShare.pct()}% of all ground — not a rare hall" }
     println(
@@ -61,7 +53,6 @@ fun main(args: Array<String>) {
             "${tally.niches / SEEDS} niches, holes ${"%.2f".format(pitShare * 100)}% of the ground."
     )
     println("  corridor drops: ${dropHit.pct()}% of teleport anchors.")
-    println("  crawlspace sites: ${crawlHit.pct()}% of sampled footings, ${crawlAxisHit.pct()}% on a named axis.")
     val perDarkCell = listOf(tally.anomalies, tally.soaks, tally.leaks).map { it * 1000.0 / tally.darkCells }
     println(
         "  damage per 1000 dark cells: ${"%.1f".format(perDarkCell[0])} wall-anomaly columns, " +
@@ -102,21 +93,6 @@ fun main(args: Array<String>) {
     check(tally.darkSurveyed / surveyed in 0.2..0.34) { "dark zones cover ${(tally.darkSurveyed / surveyed).pct()}% of the maze" }
     val map = args.firstOrNull { it.startsWith("--map") }
     if (map != null) printMap(MazeLayout(map.substringAfter("=", "-3").toLong()))
-}
-
-private fun checkNearestExit(layout: MazeLayout, seed: Long) {
-    val random = java.util.Random(seed)
-    repeat(8) {
-        val x = random.nextInt(20_000) - 10_000
-        val z = random.nextInt(20_000) - 10_000
-        val hole = checkNotNull(layout.nearestExit(x, z, 1024)) { "seed $seed: no exit hole within 1024 blocks of ($x, $z)" }
-        check(layout.pitHoleIsExit(hole[0], hole[1])) { "seed $seed: nearest exit (${hole[0]}, ${hole[1]}) is not an exit" }
-        val dx = (hole[0] - x).toLong()
-        val dz = (hole[1] - z).toLong()
-        check(dx * dx + dz * dz <= 1030L * 1030L) { "seed $seed: nearest exit (${hole[0]}, ${hole[1]}) is outside the radius" }
-        val near = layout.nearestExit(hole[0], hole[1], 16)
-        check(near != null && near.contentEquals(hole)) { "seed $seed: the exit at (${hole[0]}, ${hole[1]}) is not nearest to itself" }
-    }
 }
 
 private fun checkCorridorDrops(layout: MazeLayout, seed: Long, tally: Tally) {
@@ -174,10 +150,6 @@ private class Tally {
     var almondDark = 0
     var lightCells = 0
     var darkCells = 0
-    var crawlTries = 0
-    var crawlHits = 0
-    var crawlAxisTries = 0
-    var crawlAxisHits = 0
     var minOpen = 1.0
     var maxOpen = 0.0
     var surveyCells = 0
@@ -340,58 +312,6 @@ private fun checkFooting(layout: MazeLayout, seed: Long) {
     check(entryFlags and (MazeLayout.SOLID or MazeLayout.PIT or MazeLayout.DARK_ZONE) == 0) {
         "seed $seed: entry footing from deep in the dark zone at $deep lands on ${entry.toList()}, flags $entryFlags"
     }
-}
-
-private fun checkCrawlspace(layout: MazeLayout, seed: Long, tally: Tally) {
-    val step = 37
-    for (bx in -4..4) {
-        for (bz in -4..4) {
-            val footing = layout.findFooting(bx * step, bz * step, 32)
-            for (alongX in listOf(null, true, false)) {
-                val site = layout.crawlspace(footing[0], footing[1], alongX)
-                if (alongX == null) {
-                    tally.crawlTries++
-                    if (site != null) tally.crawlHits++
-                } else {
-                    tally.crawlAxisTries++
-                    if (site != null) tally.crawlAxisHits++
-                }
-                if (site == null) continue
-
-                val mouthX = site[0]
-                val mouthZ = site[1]
-                val ax = site[2]
-                val az = site[3]
-                val length = site[4]
-                val where = "seed $seed at (${footing[0]}, ${footing[1]}) along=$alongX"
-
-                check(length in MazeLayout.CRAWL_MIN..MazeLayout.CRAWL_MAX) {
-                    "$where: crawlspace is $length blocks long"
-                }
-                check(Math.abs(ax) + Math.abs(az) == 1) { "$where: the channel runs diagonally" }
-                if (alongX != null) {
-                    check((ax != 0) == alongX) { "$where: the channel ignored the axis it was given" }
-                }
-
-                val mouth = layout.columnAt(mouthX, mouthZ)
-                check(mouth and MazeLayout.SOLID == 0) { "$where: the crawlspace has no way out" }
-                check(mouth and MazeLayout.PIT == 0) { "$where: the crawlspace lets out over a hole" }
-
-                checkSolid(layout, mouthX + ax * (length + 1), mouthZ + az * (length + 1), "$where: far end is open")
-                for (i in 1..length) {
-                    val cx = mouthX + ax * i
-                    val cz = mouthZ + az * i
-                    checkSolid(layout, cx, cz, "$where: channel column $i is not wall")
-                    checkSolid(layout, cx + az, cz - ax, "$where: channel column $i opens sideways")
-                    checkSolid(layout, cx - az, cz + ax, "$where: channel column $i opens sideways")
-                }
-            }
-        }
-    }
-}
-
-private fun checkSolid(layout: MazeLayout, x: Int, z: Int, message: String) {
-    check(layout.columnAt(x, z) and MazeLayout.SOLID != 0) { message }
 }
 
 private fun checkNoSeamGrid(layout: MazeLayout, seed: Long) {

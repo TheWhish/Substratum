@@ -15,7 +15,6 @@ dependencies {
 def checks = [
         mazeCheck    : "worldgen.MazeLayoutCheckKt",
         trailerCheck : "command.TrailerSetCheckKt",
-        slitCheck    : "rift.SlitGeometryCheckKt",
         lampCheck    : "client.LampFlickerCheckKt",
         burstCheck   : "level.LampBurstsCheckKt",
         lightCheck   : "client.IrradianceCheckKt",
