@@ -7,3 +7,4 @@ gradlew text eol=lf
 *.ogg binary
 *.ttf binary
 pack/** -text
+launcher/assets/suit.json text eol=lf
