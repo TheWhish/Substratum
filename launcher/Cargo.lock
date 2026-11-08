@@ -4585,7 +4585,7 @@ dependencies = [
 
 [[package]]
 name = "substratum-launcher"
-version = "0.2.2-alpha"
+version = "0.3.0-beta"
 dependencies = [
  "ed25519-dalek",
  "futures-util",

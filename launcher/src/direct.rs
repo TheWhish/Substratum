@@ -285,7 +285,10 @@ mod tests {
         let host_uuid = uuid(&host_key.verifying_key().to_bytes());
         let reached = connect(&guest.endpoint, address, &host_uuid).await.unwrap();
         let incoming = connections.recv().await.unwrap();
-        assert_eq!(peer(&incoming), Some(uuid(&guest_key.verifying_key().to_bytes())));
+        assert_eq!(
+            peer(&incoming),
+            Some(uuid(&guest_key.verifying_key().to_bytes()))
+        );
         let (mut send, mut receive) = reached.open_bi().await.unwrap();
         send.write_all(b"ping").await.unwrap();
         send.finish().unwrap();
@@ -294,6 +297,10 @@ mod tests {
         back.write_all(b"pong").await.unwrap();
         back.finish().unwrap();
         assert_eq!(receive.read_to_end(16).await.unwrap(), b"pong");
-        assert!(connect(&guest.endpoint, address, "someone-else").await.is_none());
+        assert!(
+            connect(&guest.endpoint, address, "someone-else")
+                .await
+                .is_none()
+        );
     }
 }

@@ -30,7 +30,9 @@ pub fn download(agent: &Agent, release: &Release, progress: &Progress) -> Result
 pub fn apply(fresh: &Path) -> io::Result<()> {
     let current = std::env::current_exe()?;
     swap(&current, fresh)?;
-    Command::new(&current).args(std::env::args_os().skip(1)).spawn()?;
+    Command::new(&current)
+        .args(std::env::args_os().skip(1))
+        .spawn()?;
     Ok(())
 }
 
@@ -75,7 +77,10 @@ mod tests {
             fs::write(&fresh, new).unwrap();
             swap(&current, &fresh).unwrap();
             assert_eq!(fs::read_to_string(&current).unwrap(), new);
-            assert_eq!(fs::read_to_string(current.with_extension("old")).unwrap(), old);
+            assert_eq!(
+                fs::read_to_string(current.with_extension("old")).unwrap(),
+                old
+            );
             assert!(!fresh.exists());
         }
         assert!(swap(&current, &fresh).is_err());

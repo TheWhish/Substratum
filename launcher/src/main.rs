@@ -3,6 +3,7 @@
 mod code;
 mod direct;
 mod fetch;
+mod figure;
 mod install;
 mod launch;
 mod profile;
@@ -24,6 +25,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use fetch::{Error, Progress};
+use figure::View;
 use install::Ready;
 use profile::Profile;
 use settings::{AfterLaunch, Language, Settings, Window};
@@ -54,7 +56,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     app.set_scanlines(vhs::scanlines());
     app.set_tracking_time(vhs::TRACKING.as_millis() as i64);
     app.set_build(install::installed(&home).unwrap_or_default().into());
-    app.set_presets(presets());
+    app.set_presets(PRESETS.len() as i32);
+    bind_figure(&app)?;
     app.set_nick(profile.borrow().nick.as_str().into());
     show_skin(&app, &profile.borrow());
 
@@ -462,28 +465,33 @@ fn persist(home: &Path, profile: &Profile) {
 }
 
 fn show_skin(app: &AppWindow, profile: &Profile) {
-    match profile.skin() {
-        Ok(skin) => {
-            app.set_front(skin.front());
-            app.set_back(skin.back());
-        }
-        Err(error) => eprintln!("built-in skin is broken: {error}"),
-    }
     app.set_skin(profile.preset() as i32);
 }
 
-fn presets() -> ModelRc<slint::Image> {
-    let figures: Vec<slint::Image> = PRESETS
+fn bind_figure(app: &AppWindow) -> Result<(), Box<dyn std::error::Error>> {
+    let figure = figure::Figure::load()?;
+    let skins = PRESETS
         .iter()
-        .filter_map(|preset| match Skin::preset(preset) {
-            Ok(skin) => Some(skin.front()),
-            Err(error) => {
-                eprintln!("built-in skin is broken: {error}");
-                None
-            }
-        })
-        .collect();
-    ModelRc::new(VecModel::from(figures))
+        .map(Skin::preset)
+        .collect::<Result<Vec<_>, _>>()?;
+    app.global::<Figure>()
+        .on_render(move |skin, yaw, tilt, age, width, height| {
+            let Some(skin) = usize::try_from(skin)
+                .ok()
+                .and_then(|index| skins.get(index))
+            else {
+                return slint::Image::default();
+            };
+            let view = View {
+                yaw,
+                tilt,
+                age,
+                width: width.round() as u32,
+                height: height.round() as u32,
+            };
+            figure.render(skin, &view)
+        });
+    Ok(())
 }
 
 fn quit() {

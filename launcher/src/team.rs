@@ -314,11 +314,14 @@ impl Core {
     fn publish(&mut self, refused: Option<Refusal>) {
         self.reconcile_door();
         self.reconcile_peers();
-        let direct = self.door.as_ref().and_then(|door| match &*door.route.borrow() {
-            Route::Pending => None,
-            Route::Direct(_) => Some(true),
-            Route::Relay => Some(false),
-        });
+        let direct = self
+            .door
+            .as_ref()
+            .and_then(|door| match &*door.route.borrow() {
+                Route::Pending => None,
+                Route::Direct(_) => Some(true),
+                Route::Relay => Some(false),
+            });
         (self.notify)(Update {
             online: self.server.is_some(),
             me: self.me.clone(),
@@ -348,29 +351,34 @@ impl Core {
                 && team.session.as_ref().is_some_and(|session| session.open)
         });
         match (wanted, &self.door) {
-            (true, None) => match std::net::TcpListener::bind(("127.0.0.1", 0))
-                .and_then(|listener| {
+            (true, None) => {
+                match std::net::TcpListener::bind(("127.0.0.1", 0)).and_then(|listener| {
                     listener.set_nonblocking(true)?;
                     TcpListener::from_std(listener)
                 }) {
-                Ok(listener) => {
-                    let port = listener.local_addr().map(|address| address.port()).unwrap_or(0);
-                    let initial = match self.direct {
-                        Some(_) => Route::Pending,
-                        None => Route::Relay,
-                    };
-                    let route = Arc::new(watch::channel(initial).0);
-                    let receiver = route.subscribe();
-                    let door = serve_door(listener, self.url.clone(), self.token.clone(), receiver);
-                    let task = tokio::spawn(door);
-                    if self.direct.is_some() {
-                        tokio::spawn(settle(route.clone(), self.events.clone()));
-                        self.tell(ToServer::Punch);
+                    Ok(listener) => {
+                        let port = listener
+                            .local_addr()
+                            .map(|address| address.port())
+                            .unwrap_or(0);
+                        let initial = match self.direct {
+                            Some(_) => Route::Pending,
+                            None => Route::Relay,
+                        };
+                        let route = Arc::new(watch::channel(initial).0);
+                        let receiver = route.subscribe();
+                        let door =
+                            serve_door(listener, self.url.clone(), self.token.clone(), receiver);
+                        let task = tokio::spawn(door);
+                        if self.direct.is_some() {
+                            tokio::spawn(settle(route.clone(), self.events.clone()));
+                            self.tell(ToServer::Punch);
+                        }
+                        self.door = Some(Door { port, task, route });
                     }
-                    self.door = Some(Door { port, task, route });
+                    Err(error) => eprintln!("failed to open the door to the host: {error}"),
                 }
-                Err(error) => eprintln!("failed to open the door to the host: {error}"),
-            },
+            }
             (false, Some(_)) => {
                 if let Some(door) = self.door.take() {
                     door.task.abort();
@@ -501,9 +509,13 @@ async fn converse(
     let hello = ToServer::Hello {
         key: hex(&key.verifying_key().to_bytes()),
         signature: hex(&key.sign(&hello_message(&nonce)).to_bytes()),
-        profile: profile.lock().unwrap_or_else(PoisonError::into_inner).clone(),
+        profile: profile
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone(),
     };
-    sink.send(Message::text(serde_json::to_string(&hello)?)).await?;
+    sink.send(Message::text(serde_json::to_string(&hello)?))
+        .await?;
     let (outbox, mut inbox) = unbounded_channel();
     events
         .send(Event::Connected(outbox))
@@ -563,7 +575,11 @@ async fn serve_game(listener: TcpListener, secret: String, events: UnboundedSend
         }
         let writing = async {
             while let Some(line) = inbox.recv().await {
-                if writer.write_all(format!("{line}\n").as_bytes()).await.is_err() {
+                if writer
+                    .write_all(format!("{line}\n").as_bytes())
+                    .await
+                    .is_err()
+                {
                     return;
                 }
             }
@@ -590,7 +606,10 @@ async fn serve_game(listener: TcpListener, secret: String, events: UnboundedSend
     }
 }
 
-async fn read_line<R: AsyncBufRead + Unpin>(reader: &mut R, line: &mut String) -> std::io::Result<bool> {
+async fn read_line<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+    line: &mut String,
+) -> std::io::Result<bool> {
     line.clear();
     let read = (&mut *reader).take(LINE_LIMIT).read_line(line).await?;
     Ok(read > 0 && line.ends_with('\n'))
@@ -700,7 +719,8 @@ async fn relay(url: &str, hello: Relay, local: TcpStream) -> Result<(), Failure>
         tokio_tungstenite::connect_async_with_config(format!("{url}{RELAY_PATH}"), None, true)
             .await?;
     let (mut sink, mut stream) = socket.split();
-    sink.send(Message::text(serde_json::to_string(&hello)?)).await?;
+    sink.send(Message::text(serde_json::to_string(&hello)?))
+        .await?;
     let (mut from_game, mut to_game) = local.into_split();
     let outgoing = async {
         let mut buffer = vec![0; RELAY_CHUNK];
@@ -744,22 +764,34 @@ mod tests {
 
     impl Game {
         async fn attach(link: &GameLink) -> Game {
-            let (reader, writer) = TcpStream::connect(("127.0.0.1", link.port)).await.unwrap().into_split();
+            let (reader, writer) = TcpStream::connect(("127.0.0.1", link.port))
+                .await
+                .unwrap()
+                .into_split();
             let mut game = Game {
                 lines: BufReader::new(reader).lines(),
                 writer,
             };
-            game.say(&format!(r#"{{"type":"hello","key":"{}"}}"#, link.secret)).await;
+            game.say(&format!(r#"{{"type":"hello","key":"{}"}}"#, link.secret))
+                .await;
             game
         }
 
         async fn say(&mut self, line: &str) {
-            self.writer.write_all(format!("{line}\n").as_bytes()).await.unwrap();
+            self.writer
+                .write_all(format!("{line}\n").as_bytes())
+                .await
+                .unwrap();
         }
 
         async fn until(&mut self, wanted: impl Fn(&Value) -> bool) -> Value {
             loop {
-                let line = self.lines.next_line().await.unwrap().expect("the launcher closed the link");
+                let line = self
+                    .lines
+                    .next_line()
+                    .await
+                    .unwrap()
+                    .expect("the launcher closed the link");
                 let state: Value = serde_json::from_str(&line).unwrap();
                 if wanted(&state) {
                     return state;
@@ -775,9 +807,13 @@ mod tests {
             skin: "red".into(),
             build: "1".into(),
         };
-        let handle = start(SigningKey::from_bytes(&[seed; 32]), profile, move |update| {
-            let _ = updates.send(update);
-        });
+        let handle = start(
+            SigningKey::from_bytes(&[seed; 32]),
+            profile,
+            move |update| {
+                let _ = updates.send(update);
+            },
+        );
         (handle.unwrap(), inbox)
     }
 
@@ -811,22 +847,32 @@ mod tests {
         let mut host_game = Game::attach(&host.link).await;
         let mut guest_game = Game::attach(&guest.link).await;
         guest.send(Command::Join(code));
-        host_game.say(r#"{"type":"presence","presence":"menu"}"#).await;
-        guest_game.say(r#"{"type":"presence","presence":"ready"}"#).await;
+        host_game
+            .say(r#"{"type":"presence","presence":"menu"}"#)
+            .await;
+        guest_game
+            .say(r#"{"type":"presence","presence":"ready"}"#)
+            .await;
         host_game
             .until(|state| {
-                state["team"]["members"]
-                    .as_array()
-                    .is_some_and(|members| members.iter().any(|member| member["presence"] == "ready"))
+                state["team"]["members"].as_array().is_some_and(|members| {
+                    members.iter().any(|member| member["presence"] == "ready")
+                })
             })
             .await;
         host_game.say(r#"{"type":"start"}"#).await;
-        host_game.until(|state| !state["team"]["session"].is_null()).await;
+        host_game
+            .until(|state| !state["team"]["session"].is_null())
+            .await;
         host_game
             .say(&format!(r#"{{"type":"opened","port":{world_port}}}"#))
             .await;
-        let door = guest_game.until(|state| state["door"].is_u64()).await["door"].as_u64().unwrap();
-        let mut local = TcpStream::connect(("127.0.0.1", door as u16)).await.unwrap();
+        let door = guest_game.until(|state| state["door"].is_u64()).await["door"]
+            .as_u64()
+            .unwrap();
+        let mut local = TcpStream::connect(("127.0.0.1", door as u16))
+            .await
+            .unwrap();
         local.write_all(b"through the door").await.unwrap();
         let mut echo = [0; 16];
         local.read_exact(&mut echo).await.unwrap();

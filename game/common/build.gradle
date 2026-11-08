@@ -44,7 +44,18 @@ tasks.register("shaderCheck", JavaExec) {
     args file("src/main/resources/assets/minecraft/shaders/program").absolutePath
 }
 
-tasks.named("check") { dependsOn checks.keySet() }
+[suitCheck: false, suitExport: true].each { name, write ->
+    tasks.register(name, JavaExec) {
+        group = write ? "build" : "verification"
+        description = write ? "Writes the baked suit model for the launcher preview." : "Fails when the launcher suit model drifts from Suit.layer()."
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = "xyz.thewhish.substratum.client.SuitExportKt"
+        args rootProject.file("../launcher/assets/suit.json").absolutePath
+        systemProperty "suit.write", write
+    }
+}
+
+tasks.named("check") { dependsOn checks.keySet() + "suitCheck" }
 
 tasks.named("test") { failOnNoDiscoveredTests = false }
 

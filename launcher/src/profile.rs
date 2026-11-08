@@ -9,7 +9,7 @@ use substratum_protocol::NICK_MAX;
 
 use crate::fetch::{Error, Result, hex, io_error};
 use crate::install;
-use crate::skin::{PRESETS, Skin};
+use crate::skin::PRESETS;
 
 const FILE: &str = "profile.toml";
 const BROKEN: &str = "profile.broken.toml";
@@ -106,10 +106,6 @@ impl Profile {
         if let Some(preset) = PRESETS.get(index) {
             self.skin = preset.name.to_owned();
         }
-    }
-
-    pub fn skin(&self) -> Result<Skin> {
-        Skin::preset(&PRESETS[self.preset()])
     }
 }
 

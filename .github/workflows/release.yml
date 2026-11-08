@@ -39,10 +39,11 @@ jobs:
           $version = "$env:GITHUB_REF_NAME".Substring(1)
           $mod = (Select-String -Path game/gradle.properties -Pattern '^mod_version=(.+)$').Matches[0].Groups[1].Value
           $launcher = (Select-String -Path launcher/Cargo.toml -Pattern '^version = "(.+)"$').Matches[0].Groups[1].Value
-          if ($mod -ne $version -or $launcher -ne $version) {
-            throw "Tag $version does not match mod $mod and launcher $launcher"
+          if ($mod -ne $version) {
+            throw "Tag $version does not match mod $mod"
           }
           "VERSION=$version" >> $env:GITHUB_ENV
+          "LAUNCHER_VERSION=$launcher" >> $env:GITHUB_ENV
 
       - name: Build the mod
         working-directory: game
@@ -78,7 +79,7 @@ jobs:
           $mod[0].sha256 = $jarInfo.sha256
           $exeInfo = Describe $exe
           $launcher = [ordered]@{
-            version = $env:VERSION
+            version = $env:LAUNCHER_VERSION
             url = $exeInfo.url
             size = $exeInfo.size
             sha256 = $exeInfo.sha256
@@ -103,4 +104,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$env:GITHUB_REF_NAME" dist/* --title "Substratum $env:VERSION" --notes-file .github/release-notes.md --latest
+          gh release create "$env:GITHUB_REF_NAME" dist/* --title "Substratum $env:VERSION (launcher $env:LAUNCHER_VERSION)" --notes-file .github/release-notes.md --latest

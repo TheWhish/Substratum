@@ -6,7 +6,7 @@ import { Logo, VhsLayer } from "vhs.slint";
 import { Marker, MenuItem, Osd, RecDot, Route, Slot, WindowAction, WindowButton } from "widgets.slint";
 import { Choice, PlayPanel, ProfilePanel, SettingsPanel } from "pages.slint";
 
-export { Choice } from "pages.slint";
+export { Choice, Figure } from "pages.slint";
 
 enum Panel { play, profile, settings }
 
@@ -38,9 +38,7 @@ export component AppWindow inherits Window {
     in property <[Slot]> slots;
     in property <bool> team-online;
     in property <Route> team-route;
-    in property <image> front;
-    in property <image> back;
-    in property <[image]> presets;
+    in property <int> presets;
     in property <int> skin;
     in property <string> build;
     in property <bool> busy;
@@ -414,8 +412,6 @@ export component AppWindow inherits Window {
                                     presets: root.presets;
                                     skin: root.skin;
                                     locked: root.playing;
-                                    front: root.front;
-                                    back: root.back;
                                     nick-edited(text) => { root.nick-edited(text); }
                                     select-skin(index) => { root.select-skin(index); }
                                     refused => { root.refuse(); }

@@ -320,7 +320,11 @@ pub fn pending(home: &Path) -> Result<bool> {
 pub fn run(home: &Path, progress: &Progress) -> Result<Ready> {
     let agent = fetch::agent();
     let (manifest_bytes, manifest) = latest(&agent)?;
-    if let Some(release) = manifest.launcher.as_ref().filter(|release| update::outdated(release)) {
+    if let Some(release) = manifest
+        .launcher
+        .as_ref()
+        .filter(|release| update::outdated(release))
+    {
         return update::download(&agent, release, progress).map(Ready::Launcher);
     }
 
@@ -690,9 +694,16 @@ mod tests {
         let kept = home.join("instance").join("config").join("kept.json");
         fs::create_dir_all(kept.parent().unwrap()).unwrap();
         fs::write(&kept, "player").unwrap();
-        let downloads = configs(&home, &[config("config/kept.json"), config("config/new.json")]).unwrap();
+        let downloads = configs(
+            &home,
+            &[config("config/kept.json"), config("config/new.json")],
+        )
+        .unwrap();
         assert_eq!(downloads.len(), 1);
-        assert_eq!(downloads[0].path, home.join("instance").join("config").join("new.json"));
+        assert_eq!(
+            downloads[0].path,
+            home.join("instance").join("config").join("new.json")
+        );
         assert!(configs(&home, &[config("../options.txt")]).is_err());
         fs::remove_dir_all(&home).unwrap();
     }

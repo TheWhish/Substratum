@@ -202,20 +202,20 @@ export component PlayPanel inherits VerticalLayout {
     }
 }
 
+export global Figure {
+    pure callback render(skin: int, yaw: float, tilt: float, age: float, width: float, height: float) -> image;
+}
+
 component SkinTile inherits Rectangle {
-    in property <image> figure;
+    in property <int> preset;
     in property <bool> selected;
     in property <bool> live: true;
     callback clicked();
 
-    width: 48px;
-    height: 80px;
-
     Image {
-        width: 32px;
-        height: 64px;
-        source: root.figure;
-        image-rendering: pixelated;
+        width: parent.width;
+        height: parent.height;
+        source: Figure.render(root.preset, 0.45, 0.12, 0, self.width / 1phx, self.height / 1phx);
     }
 
     Rectangle {
@@ -232,16 +232,13 @@ component SkinTile inherits Rectangle {
 
 export component ProfilePanel inherits HorizontalLayout {
     in-out property <string> nick;
-    in property <[image]> presets;
+    in property <int> presets;
     in property <int> skin;
-    in property <image> front;
-    in property <image> back;
     in property <bool> locked;
     callback nick-edited(string);
     callback select-skin(int);
     callback refused();
 
-    property <bool> behind;
     property <int> length: root.nick.character-count;
 
     spacing: Theme.gap;
@@ -289,12 +286,20 @@ export component ProfilePanel inherits HorizontalLayout {
         Rectangle { height: Theme.gap; }
         Osd { text: @tr("СКИН"); }
         Rectangle { height: 8px; }
-        HorizontalLayout {
-            spacing: 12px;
-            alignment: start;
+        tiles := Rectangle {
+            property <length> gap: 12px;
+            property <length> tile-height: (self.height - self.gap) / 2;
+            property <length> tile-width: self.tile-height * 0.6;
+            property <int> columns: Math.max(1, Math.floor((self.width + self.gap) / (self.tile-width + self.gap)));
 
-            for figure[index] in root.presets: SkinTile {
-                figure: figure;
+            vertical-stretch: 1;
+
+            for index in root.presets: SkinTile {
+                x: Math.mod(index, tiles.columns) * (tiles.tile-width + tiles.gap);
+                y: Math.floor(index / tiles.columns) * (tiles.tile-height + tiles.gap);
+                width: tiles.tile-width;
+                height: tiles.tile-height;
+                preset: index;
                 selected: root.skin == index;
                 live: !root.locked;
                 clicked => {
@@ -306,20 +311,49 @@ export component ProfilePanel inherits HorizontalLayout {
                 }
             }
         }
-        Rectangle { vertical-stretch: 1; }
     }
 
-    Rectangle {
-        width: 180px;
+    viewer := Rectangle {
+        property <angle> turn;
+        property <angle> spin;
+        property <angle> tilt;
+        property <angle> spin-from;
+        property <angle> tilt-from;
+        property <float> age;
+        property <angle> yaw: self.turn + self.spin;
+        property <length> stage: self.height - Theme.osd-line - 24px;
+
+        width: 240px;
         border-width: 1px;
         border-color: Theme.line;
+        animate turn { duration: 450ms; easing: ease-in-out; }
+
+        Timer {
+            interval: 50ms;
+            running: true;
+            triggered => { viewer.age += 1; }
+        }
 
         Image {
-            y: (parent.height - Theme.osd-line - 12px - self.height) / 2;
-            width: 112px;
-            height: 224px;
-            source: root.behind ? root.back : root.front;
-            image-rendering: pixelated;
+            x: 1px;
+            y: 1px;
+            width: parent.width - 2px;
+            height: viewer.stage - 1px;
+            source: Figure.render(root.skin, viewer.yaw / 1rad, viewer.tilt / 1rad, viewer.age, self.width / 1phx, self.height / 1phx);
+        }
+        TouchArea {
+            height: viewer.stage;
+            mouse-cursor: self.pressed ? MouseCursor.grabbing : MouseCursor.grab;
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    viewer.spin-from = viewer.spin;
+                    viewer.tilt-from = viewer.tilt;
+                }
+            }
+            moved => {
+                viewer.spin = viewer.spin-from + (self.mouse-x - self.pressed-x) / 1px * 0.6deg;
+                viewer.tilt = Math.clamp(viewer.tilt-from + (self.mouse-y - self.pressed-y) / 1px * 0.4deg, -20deg, 20deg);
+            }
         }
         HorizontalLayout {
             y: parent.height - 12px - self.height;
@@ -328,14 +362,14 @@ export component ProfilePanel inherits HorizontalLayout {
             alignment: center;
 
             VerticalLayout { alignment: center; Marker { left: true; ink: turn-area.has-hover ? Theme.text : Theme.text-mute; } }
-            Osd { text: root.behind ? @tr("СПИНА") : @tr("ПЕРЕД"); }
+            Osd { text: Math.cos(viewer.yaw) < 0 ? @tr("СПИНА") : @tr("ПЕРЕД"); }
             VerticalLayout { alignment: center; Marker { ink: turn-area.has-hover ? Theme.text : Theme.text-mute; } }
         }
         turn-area := TouchArea {
-            y: parent.height - Theme.osd-line - 24px;
+            y: viewer.stage;
             height: Theme.osd-line + 24px;
             mouse-cursor: pointer;
-            clicked => { root.behind = !root.behind; }
+            clicked => { viewer.turn += 180deg; }
         }
     }
 }
