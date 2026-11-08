@@ -46,7 +46,7 @@ object Vhs {
     }
 
     fun level(partialTick: Float): Float {
-        if (age >= LENGTH) return 0f
+        if (age >= LENGTH || MenuShot.busy) return 0f
         return Mth.clamp(LENGTH - age - partialTick, 0f, 1f)
     }
 

@@ -24,6 +24,7 @@
     "LocalSkinMixin",
     "LoopbackHostMixin",
     "MenuBackgroundMixin",
+    "WidgetSoundMixin",
     "MenuMusicMixin",
     "ReplayPositionMixin",
     "SceneDepthMixin",

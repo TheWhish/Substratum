@@ -16,7 +16,10 @@ object Suit {
     const val HEIGHT = 64
     const val PACK = "pack"
     private const val LAMP = "lamp"
+    const val FOREARM = "forearm"
+    const val SHIN = "shin"
     private val FABRIC = CubeDeformation(0.25f)
+    private val JOINT = CubeDeformation(0.22f)
     private val GLOVE = CubeDeformation(0.4f)
     private val CUFF = CubeDeformation(0.6f, 0.2f, 0.6f)
     private val BOOT = CubeDeformation(0.4f, 0.3f, 0.4f)
@@ -65,6 +68,12 @@ object Suit {
 
     @JvmStatic
     fun animate(model: PlayerModel<*>, entity: LivingEntity, limbSwing: Float, limbSwingAmount: Float, ageInTicks: Float) {
+        model.head.setRotation(model.head.xRot, model.head.yRot, 0f)
+        model.rightArm.getChild(FOREARM).resetPose()
+        model.leftArm.getChild(FOREARM).resetPose()
+        model.rightLeg.getChild(SHIN).resetPose()
+        model.leftLeg.getChild(SHIN).resetPose()
+        if (entity is Mannequin) return rest(model, entity)
         val motion = motions.getOrPut(entity) { Motion(ageInTicks) }
         motion.follow(entity, ageInTicks)
         val step = limbSwing * STRIDE
@@ -75,6 +84,15 @@ object Suit {
             setRotation(motion.lean.position, motion.twist.position, Mth.sin(step) * PACK_ROLL * limbSwingAmount)
         }
         model.body.getChild(LAMP).setRotation(motion.swing.position + Mth.cos(step * 2) * LAMP_STEP * limbSwingAmount, 0f, motion.sway.position)
+    }
+
+    private fun rest(model: PlayerModel<*>, mannequin: Mannequin) {
+        model.body.getChild(PACK).apply {
+            setPos(0f, PACK_Y, PACK_Z)
+            setRotation(0f, 0f, 0f)
+        }
+        model.body.getChild(LAMP).setRotation(0f, 0f, 0f)
+        mannequin.pose(model)
     }
 
     private class Spring(private val stiffness: Float, private val damping: Float) {
@@ -184,22 +202,30 @@ object Suit {
         val inner = if (left) -1f else -3f
         root.addOrReplaceChild(
             name,
-            CubeListBuilder.create().mirror(left)
-                .texOffs(56, 0).addBox(inner, -2f, -2f, 4f, 12f, 4f, FABRIC)
-                .texOffs(0, 16).addBox(inner, 6f, -2f, 4f, 4f, 4f, GLOVE)
-                .texOffs(32, 16).addBox(inner, 5.5f, -2f, 4f, 1f, 4f, CUFF),
+            CubeListBuilder.create().mirror(left).texOffs(56, 0).addBox(inner, -2f, -2f, 4f, 6f, 4f, FABRIC),
             PartPose.offset(x, 2f, 0f),
+        ).addOrReplaceChild(
+            FOREARM,
+            CubeListBuilder.create().mirror(left)
+                .texOffs(56, 5).addBox(inner, -1f, -2f, 4f, 7f, 4f, JOINT)
+                .texOffs(0, 16).addBox(inner, 2f, -2f, 4f, 4f, 4f, GLOVE)
+                .texOffs(32, 16).addBox(inner, 1.5f, -2f, 4f, 1f, 4f, CUFF),
+            PartPose.offset(0f, 4f, 0f),
         )
     }
 
     private fun leg(root: PartDefinition, name: String, x: Float, left: Boolean) {
         root.addOrReplaceChild(
             name,
-            CubeListBuilder.create().mirror(left)
-                .texOffs(72, 0).addBox(-2f, 0f, -2f, 4f, 12f, 4f, FABRIC)
-                .texOffs(16, 16).addBox(-2f, 8f, -2f, 4f, 4f, 4f, BOOT)
-                .texOffs(32, 16).addBox(-2f, 7.5f, -2f, 4f, 1f, 4f, CUFF),
+            CubeListBuilder.create().mirror(left).texOffs(72, 0).addBox(-2f, 0f, -2f, 4f, 6f, 4f, FABRIC),
             PartPose.offset(x, 12f, 0f),
+        ).addOrReplaceChild(
+            SHIN,
+            CubeListBuilder.create().mirror(left)
+                .texOffs(72, 5).addBox(-2f, -1f, -2f, 4f, 7f, 4f, JOINT)
+                .texOffs(16, 16).addBox(-2f, 2f, -2f, 4f, 4f, 4f, BOOT)
+                .texOffs(32, 16).addBox(-2f, 1.5f, -2f, 4f, 1f, 4f, CUFF),
+            PartPose.offset(0f, 6f, 0f),
         )
     }
 }

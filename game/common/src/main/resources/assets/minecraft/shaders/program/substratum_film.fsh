@@ -20,6 +20,7 @@ out vec4 fragColor;
 
 const int SPECTRUM = 7;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+const vec3 SHADOW = vec3(1.02, 1.0, 0.94);
 
 float hash(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -92,6 +93,7 @@ void main() {
     colour = mix(colour, vec3(dot(colour, LUMA)), clamp(Drain + tunnel, 0.0, 1.0));
     colour *= 1.0 - clamp(0.85 * tunnel, 0.0, 1.0);
     colour *= 1.0 - Vignette * Strength * smoothstep(0.4, 1.15, radius);
+    colour = mix(dot(colour, LUMA) * SHADOW, colour, 0.5 + 0.5 * smoothstep(0.0, 0.0015, dot(colour, LUMA)));
 
     colour = pow(max(colour, 0.0), vec3(1.0 / 2.2));
 

@@ -3,6 +3,7 @@
 uniform sampler2D DiffuseSampler;
 uniform sampler2D BaseSampler;
 uniform vec2 InSize;
+uniform float Spread;
 uniform float Scatter;
 
 in vec2 texCoord;
@@ -10,7 +11,7 @@ in vec2 texCoord;
 out vec4 fragColor;
 
 vec3 tap(float x, float y) {
-    return texture(DiffuseSampler, texCoord + vec2(x, y) / InSize).rgb;
+    return texture(DiffuseSampler, texCoord + vec2(x, y) * Spread / InSize).rgb;
 }
 
 void main() {

@@ -35,6 +35,7 @@ object Atmosphere {
     private const val ENTER = 1f / 20
     private const val LEAVE = 1f / 40
     private const val BLOOM = 1f
+    private const val BLOOM_HEIGHT = 1440f
     private const val GRAIN = 0.035f
     private const val GAIN = 30f
     private const val HAZE = 0.11f
@@ -423,6 +424,7 @@ object Atmosphere {
                 effect.setSampler("DiffuseSampler", IntSupplier(from::getColorTextureId))
                 samplers.forEach { (sampler, texture) -> effect.setSampler(sampler, texture) }
                 effect.safeGetUniform("InSize").set(from.width.toFloat(), from.height.toFloat())
+                effect.safeGetUniform("Spread").set(main.height / BLOOM_HEIGHT)
                 return Pass(effect, to)
             }
             val down = List(LEVELS) { keep(hdr(maxOf(1, main.width shr (it + 1)), maxOf(1, main.height shr (it + 1)), GL30.GL_R11F_G11F_B10F)) }

@@ -22,7 +22,6 @@ object Menus {
     const val MUTE = 0xFF4A473E.toInt()
     const val ALARM = 0xFFC8483C.toInt()
     const val SKY = 0xFF0C0B09.toInt()
-    const val FLOOR = 0xFF1C1912.toInt()
     const val SHADE = 0x99000000.toInt()
     const val READY = 0xFF8FA65A.toInt()
     const val PLAYING = 0xFFC8483C.toInt()

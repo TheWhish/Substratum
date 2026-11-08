@@ -1,6 +1,7 @@
 package xyz.thewhish.substratum.client.menu
 
 import dev.architectury.platform.Platform
+import net.minecraft.Util
 import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.gui.screens.options.OptionsScreen
@@ -10,13 +11,15 @@ import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.client.Link
 import xyz.thewhish.substratum.client.Lobby
 import xyz.thewhish.substratum.client.Suit
+import java.util.SplittableRandom
 
 class MainMenu(private var note: Component? = null) : Screen(Component.literal(TITLE)) {
     private var confirming = false
     private var failed = false
 
     private val left get() = width / 10
-    private val top get() = height / 2
+    private val top get() = (height + HEADER - rows * MenuButton.HEIGHT) / 2
+    private var rows = 0
 
     override fun init() {
         Lobby.inMenu()
@@ -28,6 +31,7 @@ class MainMenu(private var note: Component? = null) : Screen(Component.literal(T
             Lobby.guest -> listOf(guestAction(), settings(), quit())
             else -> hostActions() + listOf(settings(), quit())
         }
+        rows = buttons.size
         buttons.forEachIndexed { index, button ->
             button.y = top + index * MenuButton.HEIGHT
             addRenderableWidget(button)
@@ -102,22 +106,53 @@ class MainMenu(private var note: Component? = null) : Screen(Component.literal(T
     override fun onClose() = confirm(false)
 
     override fun renderBackground(graphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
-        graphics.fillGradient(0, 0, width, height, Menus.SKY, Menus.FLOOR)
+        Backdrop.render(graphics, width, height, mouseX, mouseY, true)
     }
 
     override fun render(graphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
         super.render(graphics, mouseX, mouseY, partialTick)
-        val pose = graphics.pose()
-        pose.pushPose()
-        pose.translate(left.toFloat(), (top - LOGO_GAP).toFloat(), 0f)
-        pose.scale(LOGO_SCALE, LOGO_SCALE, 1f)
-        graphics.drawString(font, TITLE, 0, -font.lineHeight, Menus.TEXT, false)
-        pose.popPose()
+        drawLogo(graphics)
         status()?.let { (text, color) ->
-            graphics.drawString(font, text, left + NOTE_INDENT, top - font.lineHeight - NOTE_GAP, color, false)
+            graphics.drawString(font, text, left + NOTE_INDENT, top + rows * MenuButton.HEIGHT + NOTE_GAP, color, false)
         }
         drawTeam(graphics)
-        graphics.drawString(font, version, EDGE, height - EDGE - font.lineHeight, Menus.MUTE, false)
+        graphics.drawString(font, version, EDGE, height - EDGE - GLYPH, Menus.MUTE, false)
+        drawTape(graphics)
+    }
+
+    private fun drawLogo(graphics: GuiGraphics) {
+        val now = Util.getMillis()
+        if (now > glitchEnd) {
+            glitchAt = now + random.nextLong(GLITCH_QUIET_MIN_MS, GLITCH_QUIET_MAX_MS)
+            glitchEnd = glitchAt + random.nextLong(GLITCH_MIN_MS, GLITCH_MAX_MS)
+        }
+        val split = if (now >= glitchAt) GLITCH_SPLIT else SPLIT
+        val tagline = top - TAGLINE_GAP - BASELINE
+        val pose = graphics.pose()
+        for ((shift, color) in listOf(-split to RED, split to CYAN, 0f to Menus.TEXT)) {
+            pose.pushPose()
+            pose.translate(left + shift, (tagline - LOGO_GAP).toFloat(), 0f)
+            pose.scale(LOGO_SCALE, LOGO_SCALE, 1f)
+            graphics.drawString(font, LOGO, 0, -BASELINE, color, false)
+            pose.popPose()
+        }
+        val glyphs = TAGLINE.map { letter -> Component.literal(letter.toString()).withStyle { it.withFont(CAPTION) } }
+        val span = (font.width(LOGO) - 1) * LOGO_SCALE - TAGLINE_INDENT
+        val spacing = (span - glyphs.sumOf { font.width(it) }) / (glyphs.size - 1)
+        var x = left + TAGLINE_INDENT
+        for (glyph in glyphs) {
+            pose.pushPose()
+            pose.translate(x, 0f, 0f)
+            graphics.drawString(font, glyph, 0, tagline, Menus.DIM, false)
+            pose.popPose()
+            x += font.width(glyph) + spacing
+        }
+    }
+
+    private fun drawTape(graphics: GuiGraphics) {
+        val seconds = (Util.getMillis() - opened) / 1000
+        val tape = "%02d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
+        graphics.drawString(font, tape, width - EDGE - font.width(tape) + 1, height - EDGE - GLYPH, Menus.MUTE, false)
     }
 
     private fun status(): Pair<Component, Int>? {
@@ -163,14 +198,35 @@ class MainMenu(private var note: Component? = null) : Screen(Component.literal(T
 
     private companion object {
         const val TITLE = "SUBSTRATUM"
-        const val LOGO_SCALE = 4f
-        const val LOGO_GAP = 24
+        const val LOGO_SCALE = 1.6f
+        const val HEADER = 84
+        const val LOGO_GAP = 5
+        const val BASELINE = 7
+        const val GLYPH = 7
+        const val TAGLINE = "FOUND FOOTAGE · NO SIGNAL"
+        const val TAGLINE_GAP = 24
+        const val TAGLINE_INDENT = 1f
+        const val SPLIT = 0.35f
+        const val GLITCH_SPLIT = 1.2f
+        const val GLITCH_MIN_MS = 70L
+        const val GLITCH_MAX_MS = 160L
+        const val GLITCH_QUIET_MIN_MS = 2_500L
+        const val GLITCH_QUIET_MAX_MS = 7_000L
+        const val RED = 0x8CFF3C28.toInt()
+        const val CYAN = 0x733CC8FF
         const val NOTE_INDENT = 10
         const val NOTE_GAP = 6
         const val EDGE = 8
         const val FACE = 18
         const val SLOT = 24
         const val SLOT_GAP = 6
+
+        val CAPTION: ResourceLocation = Substratum.id("caption")
+        val LOGO: Component = Component.literal(TITLE).withStyle { it.withFont(Substratum.id("logo")) }
+        val random = SplittableRandom()
+        val opened = Util.getMillis()
+        var glitchAt = 0L
+        var glitchEnd = 0L
 
         val version: String by lazy {
             "v" + Platform.getMod(Substratum.ID).version

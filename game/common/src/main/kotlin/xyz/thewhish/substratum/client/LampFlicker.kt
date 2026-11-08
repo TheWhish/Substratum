@@ -52,7 +52,7 @@ object LampFlicker {
         if (current == null || player == null) return
         val eye = player.eyePosition
         if (ticks++ % SCAN_INTERVAL == 0) rescan(current, BlockPos.containing(eye))
-        val steady = minecraft.options.hideLightningFlash().get()
+        val steady = minecraft.options.hideLightningFlash().get() || MenuShot.busy
         flash(current, steady)
         val time = current.gameTime
         val iterator = lamps.iterator()
@@ -121,7 +121,13 @@ object LampFlicker {
     private fun conditionAt(level: ClientLevel, pos: BlockPos): LampCondition? =
         level.getBlockState(pos).takeIf { it.`is`(ModBlocks.lampBlock) }?.getValue(ModBlocks.LAMP_CONDITION)
 
-    private fun switchTo(level: ClientLevel, pos: BlockPos, condition: LampCondition) {
+    internal fun force(level: ClientLevel, pos: BlockPos, condition: LampCondition) {
+        lamps.remove(pos)
+        off.remove(pos)
+        switchTo(level, pos, condition)
+    }
+
+    internal fun switchTo(level: ClientLevel, pos: BlockPos, condition: LampCondition) {
         val chunk = level.chunkSource.getChunk(pos.x shr 4, pos.z shr 4, ChunkStatus.FULL, false) ?: return
         val index = chunk.getSectionIndex(pos.y)
         if (index !in chunk.sections.indices) return

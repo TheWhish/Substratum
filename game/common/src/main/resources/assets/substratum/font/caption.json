@@ -1,0 +1,5 @@
+{
+    "providers": [
+        { "type": "ttf", "file": "substratum:vt323.ttf", "shift": [0.0, 0.0], "size": 14.0, "oversample": 6.0 }
+    ]
+}

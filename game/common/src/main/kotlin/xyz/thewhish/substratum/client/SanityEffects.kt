@@ -87,12 +87,12 @@ object SanityEffects {
 
     fun closeIn(partialTick: Float): Float = CLOSE_IN * dread(partialTick) * ClientConfig.intensity
 
-    private fun dread(partialTick: Float): Float = Mth.lerp(partialTick, dreadO, dread)
+    private fun dread(partialTick: Float): Float = if (MenuShot.busy) 0f else Mth.lerp(partialTick, dreadO, dread)
 
     private fun breath(partialTick: Float): Double = sin(2 * PI * (clock + partialTick) / BREATH_TICKS)
 
     private fun pulse(partialTick: Float): Float {
-        if (pulseAge < 0) return 0f
+        if (pulseAge < 0 || MenuShot.busy) return 0f
         val age = pulseAge + partialTick
         return if (age < PULSE_RISE) smoothstep(0f, PULSE_RISE, age) else exp(-(age - PULSE_RISE) / PULSE_FADE)
     }

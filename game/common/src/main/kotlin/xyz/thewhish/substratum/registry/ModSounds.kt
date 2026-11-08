@@ -16,6 +16,8 @@ object ModSounds {
     val LAMP_POP: RegistrySupplier<SoundEvent> = register("lamp_pop")
     val VHS_BURST: RegistrySupplier<SoundEvent> = register("vhs_burst")
     val MENU_MUSIC: RegistrySupplier<SoundEvent> = register("music.menu")
+    val MENU_HOVER: RegistrySupplier<SoundEvent> = register("menu.hover")
+    val MENU_PRESS: RegistrySupplier<SoundEvent> = register("menu.press")
 
     fun register() {
         SOUNDS.register()

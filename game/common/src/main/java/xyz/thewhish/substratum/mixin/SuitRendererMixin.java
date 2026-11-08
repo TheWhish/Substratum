@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import xyz.thewhish.substratum.client.Mannequin;
 import xyz.thewhish.substratum.client.SuitMarks;
 
 @Mixin(PlayerRenderer.class)
@@ -24,6 +25,14 @@ abstract class SuitRendererMixin extends LivingEntityRenderer<AbstractClientPlay
     @Inject(method = "<init>", at = @At("TAIL"))
     private void substratum$marks(EntityRendererProvider.Context context, boolean slim, CallbackInfo ci) {
         addLayer(new SuitMarks(this));
+    }
+
+    @Inject(
+        method = "setupRotations(Lnet/minecraft/client/player/AbstractClientPlayer;Lcom/mojang/blaze3d/vertex/PoseStack;FFFF)V",
+        at = @At("TAIL")
+    )
+    private void substratum(AbstractClientPlayer player, PoseStack poseStack, float bob, float yaw, float partialTick, float scale, CallbackInfo ci) {
+        if (player instanceof Mannequin mannequin) mannequin.slump(poseStack);
     }
 
     @Inject(
