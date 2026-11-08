@@ -6,6 +6,7 @@ import net.minecraft.core.registries.Registries
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.entity.MobCategory
 import xyz.thewhish.substratum.Substratum
+import xyz.thewhish.substratum.level.Remains
 import xyz.thewhish.substratum.smiler.Smiler
 
 object ModEntities {
@@ -19,6 +20,14 @@ object ModEntities {
             .clientTrackingRange(Smiler.TRACKING_CHUNKS)
             .updateInterval(1)
             .build("smiler")
+    }
+
+    val REMAINS: RegistrySupplier<EntityType<Remains>> = ENTITIES.register("remains") {
+        EntityType.Builder.of<Remains>(::Remains, MobCategory.MISC)
+            .sized(Remains.WIDTH, Remains.HEIGHT)
+            .noSave()
+            .clientTrackingRange(Remains.TRACKING_CHUNKS)
+            .build("remains")
     }
 
     fun register() {

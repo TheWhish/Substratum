@@ -1,3 +1,5 @@
+import net.fabricmc.loom.api.mappings.layered.MappingsNamespace
+
 plugins {
     id "com.gradleup.shadow" version "9.6.1"
 }
@@ -58,3 +60,20 @@ shadowJar {
 remapJar {
     inputFile.set shadowJar.archiveFile
 }
+
+tasks.register("mixinCheck", JavaExec) {
+    group = "verification"
+    description = "Fails when a mixin in the release jar misses its target in the production game."
+    dependsOn remapJar
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "xyz.thewhish.substratum.MixinCheckKt"
+    doFirst {
+        def game = loom.getMinecraftJars(MappingsNamespace.INTERMEDIARY)
+        def portals = fileTree(rootProject.file("libs")) { include "immersive-portals-*.jar" }.files
+        args([remapJar.archiveFile.get().asFile.absolutePath] + game.collect { it.toAbsolutePath().toString() } + portals.collect { it.absolutePath })
+    }
+}
+
+tasks.named("check") { dependsOn "mixinCheck" }
+
+tasks.named("test") { failOnNoDiscoveredTests = false }

@@ -5,13 +5,18 @@ import dev.architectury.event.events.common.PlayerEvent
 import dev.architectury.event.events.common.TickEvent
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.entity.player.Player
+import xyz.thewhish.substratum.level.Run
 import xyz.thewhish.substratum.level.SubstratumLevels
 import xyz.thewhish.substratum.network.SanitySync
+import xyz.thewhish.substratum.worldgen.MazeChunkGenerator
+import xyz.thewhish.substratum.worldgen.MazeLayout
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 object SanityTracker {
     const val SYNC_INTERVAL = 40
+    const val LIMIT = 15_000
+    private const val DARK_STEP = 2
 
     private val elapsed = ConcurrentHashMap<UUID, Int>()
 
@@ -19,10 +24,6 @@ object SanityTracker {
         TickEvent.SERVER_POST.register { server -> server.playerList.players.forEach(::tick) }
         LifecycleEvent.SERVER_STOPPING.register { elapsed.clear() }
         PlayerEvent.PLAYER_JOIN.register(::sync)
-        PlayerEvent.PLAYER_RESPAWN.register { player, _, _ ->
-            elapsed.remove(player.uuid)
-            sync(player)
-        }
     }
 
     fun ticks(player: Player): Int = elapsed[player.uuid] ?: 0
@@ -48,8 +49,18 @@ object SanityTracker {
             if (elapsed.remove(player.uuid) != null) sync(player)
             return
         }
-        val now = elapsed.merge(player.uuid, 1) { current, _ -> if (current == Int.MAX_VALUE) current else current + 1 } ?: return
-        if (now == 1 || now % SYNC_INTERVAL == 0) sync(player)
+        if (player.isSpectator) return
+        val step = if (inDark(player)) DARK_STEP else 1
+        val before = ticks(player)
+        val now = before + step
+        elapsed[player.uuid] = now
+        if (now >= LIMIT) return Run.lose(player)
+        if (before == 0 || now / SYNC_INTERVAL != before / SYNC_INTERVAL) sync(player)
+    }
+
+    private fun inDark(player: ServerPlayer): Boolean {
+        val layout = (player.serverLevel().chunkSource.generator as? MazeChunkGenerator)?.layout ?: return false
+        return layout.columnAt(player.blockX, player.blockZ) and MazeLayout.DARK_ZONE != 0
     }
 
     private fun sync(player: ServerPlayer) = SanitySync.send(player, ticks(player))

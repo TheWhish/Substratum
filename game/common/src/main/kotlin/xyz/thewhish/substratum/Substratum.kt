@@ -7,13 +7,13 @@ import org.slf4j.LoggerFactory
 import xyz.thewhish.substratum.command.SubstratumCommand
 import xyz.thewhish.substratum.config.ServerConfig
 import xyz.thewhish.substratum.gaze.Watch
-import xyz.thewhish.substratum.level.Arrival
-import xyz.thewhish.substratum.level.BackroomsDeath
 import xyz.thewhish.substratum.level.BackroomsGuard
 import xyz.thewhish.substratum.level.Epoch
 import xyz.thewhish.substratum.level.LampBursts
 import xyz.thewhish.substratum.level.LevelRules
 import xyz.thewhish.substratum.level.PitExitGuard
+import xyz.thewhish.substratum.level.Run
+import xyz.thewhish.substratum.network.FeedSync
 import xyz.thewhish.substratum.network.Gate
 import xyz.thewhish.substratum.network.ProbeSync
 import xyz.thewhish.substratum.network.SanitySync
@@ -44,17 +44,17 @@ object Substratum {
         ModItems.register()
         ModChunkGenerators.register()
         Epoch.register()
-        Arrival.register()
+        Run.register()
         SanityTracker.register()
         LampBursts.register()
         LevelRules.register()
         PitExitGuard.register()
         BackroomsGuard.register()
-        BackroomsDeath.register()
         ViewportSync.register()
         Watch.register()
         SanitySync.register()
         VhsSync.register()
+        FeedSync.register()
         SmilerSync.register()
         ProbeSync.register()
         Gate.register()

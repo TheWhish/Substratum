@@ -20,6 +20,8 @@ object SanityEffects {
     private const val TUNNEL_IN_LIGHT = 0.4f
     private const val DRAIN = 0.15f
     private const val CLOSE_IN = 0.25f
+    private const val END_DRAIN = 0.85f
+    private const val END_HUSH = 0.8f
 
     private const val PULSE_RISE = 5f
     private const val PULSE_FADE = 16f
@@ -81,13 +83,22 @@ object SanityEffects {
     fun tunnel(partialTick: Float): Float =
         TUNNEL * dread(partialTick) * Mth.lerp(dark, TUNNEL_IN_LIGHT, 1f) + PULSE_TUNNEL * pulse(partialTick)
 
-    fun drain(partialTick: Float): Float = DRAIN * dread(partialTick) + PULSE_DRAIN * pulse(partialTick)
+    fun drain(partialTick: Float): Float = DRAIN * dread(partialTick) + PULSE_DRAIN * pulse(partialTick) + END_DRAIN * end(partialTick)
+
+    @JvmStatic
+    fun hearing(): Float = 1f - END_HUSH * end(0f)
 
     fun grain(partialTick: Float): Float = dread(partialTick)
 
     fun closeIn(partialTick: Float): Float = CLOSE_IN * dread(partialTick) * ClientConfig.intensity
 
     private fun dread(partialTick: Float): Float = if (MenuShot.busy) 0f else Mth.lerp(partialTick, dreadO, dread)
+
+    private fun end(partialTick: Float): Float {
+        val level = Minecraft.getInstance().level
+        if (MenuShot.busy || level?.dimension() != SubstratumLevels.LEVEL_0) return 0f
+        return SanityClient.end(partialTick)
+    }
 
     private fun breath(partialTick: Float): Double = sin(2 * PI * (clock + partialTick) / BREATH_TICKS)
 

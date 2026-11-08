@@ -100,7 +100,7 @@ object Watch {
 
     private fun own(level: ServerLevel): Gaze = own.getOrPut(level.dimension()) {
         val layout = if (level.dimension() == SubstratumLevels.LEVEL_0) (level.chunkSource.generator as? MazeChunkGenerator)?.layout else null
-        Gaze(layout, level.players().map { viewer(level, layout != null, it) }, level)
+        Gaze(layout, level.players().filter { it.camera === it }.map { viewer(level, layout != null, it) }, level)
     }
 
     private fun windows(from: ServerLevel, into: ServerLevel): List<Viewer> {

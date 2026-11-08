@@ -35,6 +35,7 @@ object SubstratumClient {
         ClientTickEvent.CLIENT_POST.register(Lobby::tick)
         RenderTypeRegistry.register(RenderType.cutout(), ModBlocks.ALMOND_WATER.get())
         EntityRendererRegistry.register(ModEntities.SMILER, ::SmilerRenderer)
+        EntityRendererRegistry.register(ModEntities.REMAINS, ::RemainsRenderer)
         ClientTickEvent.CLIENT_LEVEL_POST.register { level ->
             reportViewportIfChanged()
             turnSmilers(level)
@@ -50,6 +51,8 @@ object SubstratumClient {
         ClientTickEvent.CLIENT_POST.register(Vhs::tick)
         ClientTickEvent.CLIENT_POST.register(Labels::tick)
         ClientGuiEvent.RENDER_HUD.register(Vhs::renderHud)
+        ClientGuiEvent.RENDER_HUD.register { graphics, _ -> Feed.renderHud(graphics) }
+        ClientTickEvent.CLIENT_PRE.register(Feed::tick)
         ClientTickEvent.CLIENT_POST.register(ProbeView::tick)
         ClientGuiEvent.RENDER_HUD.register { graphics, _ -> ProbeView.renderHud(graphics) }
         ClientConfig.load()
@@ -69,6 +72,7 @@ object SubstratumClient {
             Lobby.left()
             SanityClient.reset()
             Vhs.reset()
+            Feed.reset()
             ProbeView.reset()
             Atmosphere.forget()
         }

@@ -23,6 +23,7 @@ def checks = [
         directorCheck: "reality.DirectorCheckKt",
         replayCheck  : "network.ReplayPositionCheckKt",
         presenceCheck: "client.PresenceCheckKt",
+        spawnCheck   : "level.SpawnPlanCheckKt",
 ]
 
 checks.each { name, main ->

@@ -45,11 +45,9 @@ object LevelRules {
             }
         }
         EntityEvent.LIVING_HURT.register { entity, source, _ ->
-            if (entity is ServerPlayer && !source.`is`(DamageTypes.GENERIC_KILL) && entity.level().dimension() == SubstratumLevels.LEVEL_0) {
-                EventResult.interruptFalse()
-            } else {
-                EventResult.pass()
-            }
+            if (entity !is ServerPlayer || entity.level().dimension() != SubstratumLevels.LEVEL_0) return@register EventResult.pass()
+            if (source.`is`(DamageTypes.GENERIC_KILL)) Run.lose(entity)
+            EventResult.interruptFalse()
         }
         LifecycleEvent.SERVER_STARTED.register(::applyGameRules)
         TickEvent.SERVER_POST.register(::tickReducedDebug)

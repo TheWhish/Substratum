@@ -6,26 +6,22 @@ import com.mojang.math.Axis
 import net.minecraft.client.model.PlayerModel
 import net.minecraft.client.model.geom.ModelPart
 import net.minecraft.client.multiplayer.ClientLevel
-import net.minecraft.client.player.RemotePlayer
-import net.minecraft.client.resources.PlayerSkin
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import java.util.UUID
 
-class Mannequin(level: ClientLevel, private val mirrored: Boolean) : RemotePlayer(level, GameProfile(UUID.randomUUID(), NAME)) {
-
-    override fun getSkin(): PlayerSkin = LocalSkin.of(gameProfile) ?: super.getSkin()
+class Mannequin(level: ClientLevel, private val mirrored: Boolean) : Figure(level, GameProfile(UUID.randomUUID(), NAME)) {
 
     override fun getScale(): Float = SIZE
 
-    fun slump(poseStack: PoseStack) {
+    override fun slump(poseStack: PoseStack) {
         poseStack.translate(0f, HIP - DROP, 0f)
         poseStack.mulPose(Axis.XP.rotation(LEAN))
         poseStack.mulPose(Axis.ZP.rotation(side * ROLL))
         poseStack.translate(0f, -HIP, 0f)
     }
 
-    fun pose(model: PlayerModel<*>) {
+    override fun pose(model: PlayerModel<*>) {
         model.head.setRotation(0.8f + LEAN, side * 0.25f, side * 0.3f)
         bend(if (mirrored) model.leftArm else model.rightArm, Suit.FOREARM, LEAN - 0.05f, side * 0.05f, side * 0.25f, -0.55f)
         bend(if (mirrored) model.rightArm else model.leftArm, Suit.FOREARM, LEAN - 0.6f, side * 0.35f, side * -0.05f, -0.8f)

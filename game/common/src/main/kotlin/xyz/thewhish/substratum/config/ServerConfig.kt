@@ -11,10 +11,6 @@ object ServerConfig {
     private val file = ConfigFile(
         "substratum-server.toml",
         """
-        [death]
-        # nothing hurts in Level 0, /kill there keeps the inventory and experience
-        keep_inventory = true
-
         [reality]
         # false keeps Level 0 calm: nothing new happens, what has already begun ends as usual
         enabled = true
@@ -43,8 +39,6 @@ object ServerConfig {
         fun pace(kind: Manifestation): Pace = paces.getValue(kind)
     }
 
-    var keepInventory = true
-        private set
     var reality = RealitySettings()
         private set
 
@@ -54,7 +48,6 @@ object ServerConfig {
 
     private fun load() {
         file.load()
-        keepInventory = file.boolean("death.keep_inventory", true)
         reality = loadReality()
     }
 

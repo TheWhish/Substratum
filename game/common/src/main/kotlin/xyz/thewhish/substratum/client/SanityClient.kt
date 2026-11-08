@@ -2,12 +2,14 @@ package xyz.thewhish.substratum.client
 
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.util.Mth
 import xyz.thewhish.substratum.sanity.SanityPhase
 import xyz.thewhish.substratum.sanity.SanityTracker
 
 object SanityClient {
 
     private const val MAX_EXTRAPOLATION = SanityTracker.SYNC_INTERVAL * 2f
+    private const val LAST_MINUTE = 60 * 20f
 
     private var ticks = 0
     private var level: ClientLevel? = null
@@ -27,6 +29,11 @@ object SanityClient {
     }
 
     fun pressure(partialTick: Float): Float = SanityPhase.pressure(ticks(partialTick).toDouble()).toFloat()
+
+    fun end(partialTick: Float): Float {
+        val t = Mth.clamp((ticks(partialTick) - SanityTracker.LIMIT + LAST_MINUTE) / LAST_MINUTE, 0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
 
     fun reset() {
         ticks = 0

@@ -19,6 +19,7 @@ import net.minecraft.server.level.ServerPlayer
 import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.client.Link
 import xyz.thewhish.substratum.client.Lobby
+import xyz.thewhish.substratum.level.Run
 
 object Gate {
     private const val PATIENCE = 60_000L
@@ -30,7 +31,8 @@ object Gate {
     private val TYPE = CustomPacketPayload.Type<Release>(Substratum.id("release"))
     private val CODEC: StreamCodec<FriendlyByteBuf, Release> = StreamCodec.unit(Release)
 
-    private var released = false
+    var released = Platform.getEnvironment() == Env.SERVER
+        private set
     private var openedAt = 0L
 
     fun register() {
@@ -76,6 +78,7 @@ object Gate {
 
     private fun release(server: MinecraftServer) {
         released = true
+        Run.begin(server)
         server.playerList.players.forEach { player: ServerPlayer -> NetworkManager.sendToPlayer(player, Release) }
     }
 }

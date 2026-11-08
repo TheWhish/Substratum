@@ -73,7 +73,7 @@ object Suit {
         model.leftArm.getChild(FOREARM).resetPose()
         model.rightLeg.getChild(SHIN).resetPose()
         model.leftLeg.getChild(SHIN).resetPose()
-        if (entity is Mannequin) return rest(model, entity)
+        if (entity is Figure) return rest(model, entity)
         val motion = motions.getOrPut(entity) { Motion(ageInTicks) }
         motion.follow(entity, ageInTicks)
         val step = limbSwing * STRIDE
@@ -86,13 +86,13 @@ object Suit {
         model.body.getChild(LAMP).setRotation(motion.swing.position + Mth.cos(step * 2) * LAMP_STEP * limbSwingAmount, 0f, motion.sway.position)
     }
 
-    private fun rest(model: PlayerModel<*>, mannequin: Mannequin) {
+    private fun rest(model: PlayerModel<*>, figure: Figure) {
         model.body.getChild(PACK).apply {
             setPos(0f, PACK_Y, PACK_Z)
             setRotation(0f, 0f, 0f)
         }
         model.body.getChild(LAMP).setRotation(0f, 0f, 0f)
-        mannequin.pose(model)
+        figure.pose(model)
     }
 
     private class Spring(private val stiffness: Float, private val damping: Float) {

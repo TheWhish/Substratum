@@ -7,6 +7,7 @@ import net.minecraft.commands.CommandSourceStack
 import net.minecraft.commands.Commands
 import net.minecraft.network.chat.Component
 import xyz.thewhish.substratum.level.Arrival
+import xyz.thewhish.substratum.level.Run
 import xyz.thewhish.substratum.level.SubstratumLevels
 import xyz.thewhish.substratum.sanity.SanityPhase
 import xyz.thewhish.substratum.sanity.SanityTracker
@@ -17,6 +18,7 @@ object SubstratumCommand {
             Commands.literal("substratum")
                 .requires { it.hasPermission(2) }
                 .then(Commands.literal("enter").executes(::enter))
+                .then(Commands.literal("advance").executes(::advance))
                 .then(DebugCommand.node())
                 .then(
                     Commands.literal("sanity")
@@ -39,6 +41,13 @@ object SubstratumCommand {
         }
         Arrival.send(player)
         source.sendSuccess({ Component.translatable("commands.substratum.enter.success", player.displayName) }, true)
+        return 1
+    }
+
+    private fun advance(context: CommandContext<CommandSourceStack>): Int {
+        val source = context.source
+        Run.advance(source.server)
+        source.sendSuccess({ Component.translatable("commands.substratum.advance", Run.level) }, true)
         return 1
     }
 
