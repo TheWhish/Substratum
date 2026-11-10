@@ -11,6 +11,7 @@ uniform float Night;
 uniform float Lit;
 uniform float Hands;
 uniform float Haze;
+uniform float Dazzle;
 
 in vec2 texCoord;
 
@@ -37,5 +38,5 @@ void main() {
     float luma = dot(colour, LUMA);
     colour = mix(colour, vec3(luma), Night * Strength * (1.0 - smoothstep(0.0005, 0.02, luma)));
 
-    fragColor = vec4(pow(clamp(colour, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
+    fragColor = vec4(mix(pow(clamp(colour, 0.0, 1.0), vec3(1.0 / 2.2)), vec3(1.0), Dazzle), 1.0);
 }

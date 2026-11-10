@@ -1,6 +1,8 @@
 {
   "item.substratum.almond_water": "Миндальная вода",
+  "item.substratum.flashlight": "Фонарик",
   "block.substratum.almond_water": "Миндальная вода",
+  "block.substratum.flashlight": "Фонарик",
   "dimension.substratum.level_0": "Уровень 0",
   "entity.substratum.smiler": "Смайлер",
   "block.substratum.damp_carpet": "Влажный ковролин",
@@ -40,6 +42,7 @@
   "menu.substratum.archive_failed": "Не удалось убрать текущую игру в архив",
   "menu.substratum.loading": "ЗАГРУЗКА",
   "menu.substratum.language": "Язык меняется в лаунчере",
+  "menu.substratum.brightness": "Яркость зафиксирована: темнота — часть игры",
   "menu.substratum.ready": "ГОТОВ",
   "menu.substratum.unready": "НЕ ГОТОВ",
   "menu.substratum.return": "ВЕРНУТЬСЯ",

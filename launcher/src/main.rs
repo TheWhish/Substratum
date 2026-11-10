@@ -14,6 +14,7 @@ mod team;
 mod translations;
 mod update;
 mod vhs;
+mod voice;
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};

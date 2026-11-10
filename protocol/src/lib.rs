@@ -122,6 +122,8 @@ pub enum ToClient {
     },
     Incoming {
         stream: u64,
+        #[serde(default)]
+        voice: bool,
     },
     Punch {
         peer: String,
@@ -144,8 +146,15 @@ pub enum Refusal {
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 #[serde(tag = "role", rename_all = "kebab-case")]
 pub enum Relay {
-    Dial { token: String },
-    Accept { token: String, stream: u64 },
+    Dial {
+        token: String,
+        #[serde(default)]
+        voice: bool,
+    },
+    Accept {
+        token: String,
+        stream: u64,
+    },
 }
 
 pub fn uuid(public: &[u8; 32]) -> String {
@@ -255,6 +264,24 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<ToServer>(&text).unwrap(),
             ToServer::Profile(profile)
+        );
+    }
+
+    #[test]
+    fn relays_without_voice_carry_the_game() {
+        assert_eq!(
+            serde_json::from_str::<Relay>(r#"{"role":"dial","token":"t"}"#).unwrap(),
+            Relay::Dial {
+                token: "t".into(),
+                voice: false
+            }
+        );
+        assert_eq!(
+            serde_json::from_str::<ToClient>(r#"{"type":"incoming","stream":3}"#).unwrap(),
+            ToClient::Incoming {
+                stream: 3,
+                voice: false
+            }
         );
     }
 

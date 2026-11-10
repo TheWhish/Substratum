@@ -1,6 +1,5 @@
 package xyz.thewhish.substratum.client
 
-import xyz.thewhish.substratum.worldgen.MazeChunkGenerator
 import xyz.thewhish.substratum.worldgen.MazeLayout
 import java.awt.image.BufferedImage
 import java.io.File
@@ -11,7 +10,7 @@ private const val SIDE = 16
 private const val CHUNKS = 12
 private const val SIZE = SIDE * CHUNKS
 private const val PIXELS = 6
-private const val PROBE_Y = MazeChunkGenerator.FLOOR_Y + 1
+private const val DIM_LIFT = 0.5f
 
 private class Plan(val open: BooleanArray, val lamps: List<IntArray>, val dead: List<IntArray>, val darkZone: Int)
 
@@ -24,9 +23,9 @@ fun main() {
 
     checkChunkWindow(plan, field)
     checkLampDelta(plan, field)
-    val levels = IntArray(SIZE * SIZE) { if (plan.open[it]) Irradiance.level(field[it], Irradiance.dither(it / SIZE, PROBE_Y, it % SIZE)) else 0 }
+    val levels = FloatArray(SIZE * SIZE) { if (plan.open[it]) Irradiance.DARK + Irradiance.lift(field[it]) else 0f }
     render(plan, levels)
-    checkLevels(plan, field, levels)
+    checkLevels(plan, levels)
 }
 
 private fun planAt(layout: MazeLayout, origin: Int): Plan {
@@ -101,39 +100,17 @@ private fun checkLampDelta(plan: Plan, field: FloatArray) {
     }
 }
 
-private fun checkLevels(plan: Plan, field: FloatArray, stored: IntArray) {
-    val levels = FloatArray(stored.size) { stored[it].toFloat() }
-    val exact = FloatArray(SIZE * SIZE) { if (plan.open[it]) Irradiance.DARK + Irradiance.lift(field[it]) else 0f }
-    var worst = 0f
-    var error = 0.0
-    var vertices = 0
-    for (i in 1 until SIZE) for (j in 1 until SIZE) {
-        val here = corner(plan, levels, i, j) ?: continue
-        val truth = corner(plan, exact, i, j) ?: continue
-        error += abs(here - truth)
-        vertices++
-        for ((a, b) in listOf(i + 1 to j, i to j + 1)) {
-            val next = corner(plan, levels, a, b) ?: continue
-            val nextTruth = corner(plan, exact, a, b) ?: continue
-            worst = maxOf(worst, abs(here - next) - abs(truth - nextTruth))
-        }
-    }
+private fun checkLevels(plan: Plan, levels: FloatArray) {
     var dark = 0
     var open = 0
     for (cell in levels.indices) {
         if (!plan.open[cell]) continue
         open++
-        check(stored[cell] in Irradiance.DARK..Irradiance.BRIGHT) { "open cell $cell stored outside ${Irradiance.DARK}..${Irradiance.BRIGHT}" }
-        if (stored[cell] == Irradiance.DARK) dark++
+        check(levels[cell] in Irradiance.DARK.toFloat()..Irradiance.BRIGHT.toFloat()) { "open cell $cell lit outside ${Irradiance.DARK}..${Irradiance.BRIGHT}" }
+        if (levels[cell] < Irradiance.DARK + DIM_LIFT) dark++
     }
-    val meanError = error / vertices
     val darkShare = dark.toDouble() / open
-    println(
-        "Irradiance: rounding adds at most ${"%.2f".format(worst)} levels between smoothed corners, mean corner error ${"%.3f".format(meanError)} levels, " +
-            "${"%.1f".format(darkShare * 100)}% of the floor fully dark, ${plan.lamps.size} lit / ${plan.dead.size} dead lamps."
-    )
-    check(worst <= 1f) { "rounding adds a ${"%.2f".format(worst)}-level step between smoothed corners" }
-    check(meanError < 0.2) { "dithered corners stray ${"%.3f".format(meanError)} levels from the exact field" }
+    println("Irradiance: ${"%.1f".format(darkShare * 100)}% of the floor fully dark, ${plan.lamps.size} lit / ${plan.dead.size} dead lamps.")
     check(darkShare in 0.01..0.45) { "${"%.1f".format(darkShare * 100)}% of the floor is fully dark" }
 }
 
@@ -154,9 +131,8 @@ private fun window(open: BooleanArray, wx: Int, wz: Int, size: Int): BooleanArra
     x in 0 until SIZE && z in 0 until SIZE && open[x * SIZE + z]
 }
 
-private fun render(plan: Plan, levels: IntArray) {
+private fun render(plan: Plan, values: FloatArray) {
     val image = BufferedImage(SIZE * PIXELS, SIZE * PIXELS, BufferedImage.TYPE_INT_RGB)
-    val values = FloatArray(levels.size) { levels[it].toFloat() }
     for (i in 0 until SIZE) for (j in 0 until SIZE) {
         val openCell = plan.open[i * SIZE + j]
         val c00 = corner(plan, values, i, j) ?: 0f

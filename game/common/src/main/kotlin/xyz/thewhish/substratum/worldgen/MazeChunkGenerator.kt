@@ -165,7 +165,9 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
         val ceilingClean = pitRoom || dirtThinned(layout, x, ceiling, z)
         val tile = if (ceilingClean) Palette.ceilingTileClean else Palette.ceilingTile
         if (!solid) {
-            if (y == FLOOR_Y + 1 && column and MazeLayout.PIT_ROOM == 0 && layout.almondWaterAt(x, z)) return Palette.almondWater
+            if (y == FLOOR_Y + 1 && column and MazeLayout.PIT_ROOM == 0 && layout.almondWaterAt(x, z)) {
+                return if (layout.flashlightAt(x, z)) Palette.flashlight else Palette.almondWater
+            }
             if (y < ceiling) return Palette.air
             if (y == ceiling) {
                 if (column and MazeLayout.LAMP != 0) {
@@ -200,6 +202,7 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
     private object Palette {
         val air: BlockState = Blocks.AIR.defaultBlockState()
         val almondWater: BlockState = ModBlocks.ALMOND_WATER.get().defaultBlockState()
+        val flashlight: BlockState = ModBlocks.FLASHLIGHT.get().defaultBlockState()
         val abyssFloor: BlockState = ModBlocks.ABYSS_FLOOR.get().defaultBlockState()
         val subFloor: BlockState = ModBlocks.SUB_FLOOR.get().defaultBlockState()
         val dampCarpet: BlockState = ModBlocks.dampCarpet(clean = false)

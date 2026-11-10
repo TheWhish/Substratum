@@ -65,7 +65,7 @@ fun main(args: Array<String>) {
             if (!entry.name.endsWith(".class") || "/mixin/" !in entry.name) continue
             val node = mod.getInputStream(entry).use(::read)
             val mixin = annotations(node.invisibleAnnotations, node.visibleAnnotations).firstOrNull { it.desc == MIXIN } ?: continue
-            if (value(mixin, "remap") == false) continue
+            val remapped = value(mixin, "remap") != false
             val targets = list(mixin, "value").map { (it as Type).internalName } + list(mixin, "targets").map { (it as String).replace('.', '/') }
             for (target in targets) {
                 if (game.node(target) == null) problems += "${node.name}: target $target is missing"
@@ -81,11 +81,12 @@ fun main(args: Array<String>) {
                             }
                             for (selector in list(annotation, "method").map { it as String }) {
                                 val (name, desc) = split(member(selector))
-                                if (name != "<init>" && name != "<clinit>" && targets.none { game.hasMethod(it, name, desc) }) {
+                                val exact = desc.takeIf { remapped }
+                                if (name != "<init>" && name != "<clinit>" && targets.none { game.hasMethod(it, name, exact) }) {
                                     problems += "$where: no target method $selector"
                                 }
                             }
-                            for (at in ats(annotation)) checkAt(game, where, at, problems)
+                            if (remapped) for (at in ats(annotation)) checkAt(game, where, at, problems)
                         }
                         ACCESSOR -> (value(annotation, "value") as String?)?.let { field ->
                             if (targets.none { game.hasField(it, field, null) }) problems += "$where: no target field $field"

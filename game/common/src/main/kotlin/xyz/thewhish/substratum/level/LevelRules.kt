@@ -67,6 +67,7 @@ object LevelRules {
         rules.getRule(GameRules.RULE_DO_IMMEDIATE_RESPAWN).set(true, server)
         rules.getRule(GameRules.RULE_SHOWDEATHMESSAGES).set(false, server)
         rules.getRule(GameRules.RULE_ANNOUNCE_ADVANCEMENTS).set(false, server)
+        server.isPvpAllowed = false
     }
 
     private fun tickReducedDebug(server: MinecraftServer) {
@@ -92,6 +93,6 @@ object LevelRules {
     }
 
     private fun picksUp(player: Player, hand: InteractionHand, state: BlockState): Boolean =
-        state.`is`(ModBlocks.ALMOND_WATER.get()) && hand == InteractionHand.MAIN_HAND && !player.isSpectator &&
+        (state.`is`(ModBlocks.ALMOND_WATER.get()) || state.`is`(ModBlocks.FLASHLIGHT.get())) && hand == InteractionHand.MAIN_HAND && !player.isSpectator &&
             !(player.isSecondaryUseActive && (!player.mainHandItem.isEmpty || !player.offhandItem.isEmpty))
 }

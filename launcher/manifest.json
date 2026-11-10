@@ -56,6 +56,18 @@
       "url": "https://cdn.modrinth.com/data/ETlrkaYF/versions/OXBuueAR/cwb-5.0.0%2B1.21.0.fabric.jar",
       "size": 88893,
       "sha256": "846ffdf1fa896c1479dacb01858a8edef21f1bc4ae02b0bafe27b7a55f4e795c"
+    },
+    {
+      "file": "sound-physics-remastered-fabric-1.21.1-1.5.1.jar",
+      "url": "https://cdn.modrinth.com/data/qyVF9oeo/versions/tVu2EZ4u/sound-physics-remastered-fabric-1.21.1-1.5.1.jar",
+      "size": 205671,
+      "sha256": "8884ded0f53f97a6cb2fca9ef035947af8c3376a406e0bdaa8309bfe87801799"
+    },
+    {
+      "file": "voicechat-fabric-1.21.1-2.6.24.jar",
+      "url": "https://cdn.modrinth.com/data/9eGKb6K1/versions/6PKCVne5/voicechat-fabric-1.21.1-2.6.24.jar",
+      "size": 5386871,
+      "sha256": "a6982277bac53420c0e64f8305e133cbadb0f982b30d6ccce9b3e02dfdff991b"
     }
   ]
 }

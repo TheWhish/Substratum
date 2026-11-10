@@ -32,13 +32,14 @@ object Link {
         val session: Session? = null,
     )
 
-    class State(val me: String = "", val team: Team? = null, val door: Int? = null)
+    class State(val me: String = "", val team: Team? = null, val door: Int? = null, val voice: Int? = null)
 
     private class Incoming(
         val type: String = "",
         val me: String = "",
         val team: Team? = null,
         val door: Int? = null,
+        val voice: Int? = null,
         val reason: String? = null,
     )
 
@@ -95,6 +96,8 @@ object Link {
 
     fun ended() = send(mapOf("type" to "ended"))
 
+    fun voice(port: Int?) = send(mapOf("type" to "voice", "port" to port))
+
     fun hostedSession(): Session? {
         val state = state ?: return null
         val team = state.team ?: return null
@@ -121,14 +124,14 @@ object Link {
             return
         }
         when (message.type) {
-            "state" -> state = State(message.me, message.team, message.door)
+            "state" -> state = State(message.me, message.team, message.door, message.voice)
             "refused" -> refusal = message.reason
             else -> return
         }
         changes++
     }
 
-    private fun send(message: Map<String, Any>) {
+    private fun send(message: Map<String, Any?>) {
         synchronized(this) {
             val writer = writer ?: return
             try {

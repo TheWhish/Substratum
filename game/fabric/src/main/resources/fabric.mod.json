@@ -17,9 +17,12 @@
     ],
     "client": [
       { "adapter": "kotlin", "value": "xyz.thewhish.substratum.fabric.client.SubstratumFabricClient" }
+    ],
+    "voicechat": [
+      { "adapter": "kotlin", "value": "xyz.thewhish.substratum.voice.VoicePlugin" }
     ]
   },
-  "mixins": ["substratum-common.mixins.json", "substratum-fabric.mixins.json"],
+  "mixins": ["substratum-common.mixins.json", "substratum-sodium.mixins.json", "substratum-fabric.mixins.json"],
   "depends": {
     "java": ">=${java_version}",
     "minecraft": "~${minecraft_version}",

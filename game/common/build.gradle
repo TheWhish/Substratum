@@ -8,6 +8,7 @@ dependencies {
 
     modCompileOnly "${rootProject.imm_ptl_dep}"
     modCompileOnly "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    compileOnly fileTree(dir: "${rootProject.projectDir}/libs/devruntime", include: "voicechat-fabric-*.jar")
 
     testImplementation "org.jetbrains.kotlin:kotlin-stdlib:${rootProject.kotlin_version}"
 }
@@ -41,7 +42,9 @@ tasks.register("shaderCheck", JavaExec) {
     description = "Compiles the Level 0 shaders with the local OpenGL driver."
     classpath = sourceSets.test.runtimeClasspath
     mainClass = "xyz.thewhish.substratum.client.ShaderCheckKt"
-    args file("src/main/resources/assets/minecraft/shaders/program").absolutePath
+    dependsOn processResources
+    args file("${processResources.destinationDir}/assets/minecraft/shaders/program").absolutePath,
+        fileTree(rootProject.file("libs/devruntime")) { include "sodium-*.jar" }.singleFile.absolutePath
 }
 
 [suitCheck: false, suitExport: true].each { name, write ->
@@ -60,9 +63,16 @@ tasks.named("check") { dependsOn checks.keySet() + "suitCheck" }
 tasks.named("test") { failOnNoDiscoveredTests = false }
 
 processResources {
-    def smaa = file("src/main/shaders/smaa.glsl")
-    inputs.file(smaa)
-    filesMatching("assets/minecraft/shaders/program/substratum_smaa_*") {
-        filter { String line -> line.trim() == "#moj_import <smaa.glsl>" ? smaa.text : line }
+    def includes = file("src/main/shaders")
+    inputs.dir(includes)
+    filesMatching("assets/minecraft/shaders/program/substratum_*") {
+        filter { String line ->
+            def include = line.trim() =~ /^#moj_import <(.+)>$/
+            include.matches() ? new File(includes, include.group(1)).text : line
+        }
+    }
+    from(includes) {
+        include "capsule.glsl"
+        into "assets/substratum/shaders/include"
     }
 }

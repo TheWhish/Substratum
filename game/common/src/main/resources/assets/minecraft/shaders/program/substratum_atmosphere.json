@@ -10,6 +10,7 @@
         { "name": "Night", "type": "float", "count": 1, "values": [ 0.35 ] },
         { "name": "Lit", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "Hands", "type": "float", "count": 1, "values": [ 1.0 ] },
-        { "name": "Haze", "type": "float", "count": 1, "values": [ 0.0 ] }
+        { "name": "Haze", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Dazzle", "type": "float", "count": 1, "values": [ 0.0 ] }
     ]
 }

@@ -1,0 +1,66 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "substratum:block/flashlight"
+      },
+      {
+        "model": "substratum:block/flashlight_1"
+      },
+      {
+        "model": "substratum:block/flashlight_2"
+      },
+      {
+        "model": "substratum:block/flashlight_3"
+      },
+      {
+        "model": "substratum:block/flashlight",
+        "y": 90
+      },
+      {
+        "model": "substratum:block/flashlight_1",
+        "y": 90
+      },
+      {
+        "model": "substratum:block/flashlight_2",
+        "y": 90
+      },
+      {
+        "model": "substratum:block/flashlight_3",
+        "y": 90
+      },
+      {
+        "model": "substratum:block/flashlight",
+        "y": 180
+      },
+      {
+        "model": "substratum:block/flashlight_1",
+        "y": 180
+      },
+      {
+        "model": "substratum:block/flashlight_2",
+        "y": 180
+      },
+      {
+        "model": "substratum:block/flashlight_3",
+        "y": 180
+      },
+      {
+        "model": "substratum:block/flashlight",
+        "y": 270
+      },
+      {
+        "model": "substratum:block/flashlight_1",
+        "y": 270
+      },
+      {
+        "model": "substratum:block/flashlight_2",
+        "y": 270
+      },
+      {
+        "model": "substratum:block/flashlight_3",
+        "y": 270
+      }
+    ]
+  }
+}

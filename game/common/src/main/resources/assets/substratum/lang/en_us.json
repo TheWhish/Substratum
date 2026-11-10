@@ -1,6 +1,8 @@
 {
   "item.substratum.almond_water": "Almond Water",
+  "item.substratum.flashlight": "Flashlight",
   "block.substratum.almond_water": "Almond Water",
+  "block.substratum.flashlight": "Flashlight",
   "dimension.substratum.level_0": "Level 0",
   "entity.substratum.smiler": "Smiler",
   "block.substratum.damp_carpet": "Damp Carpet",
@@ -40,6 +42,7 @@
   "menu.substratum.archive_failed": "Could not move the current game to the archive",
   "menu.substratum.loading": "LOADING",
   "menu.substratum.language": "The language is set in the launcher",
+  "menu.substratum.brightness": "Brightness is fixed: darkness is part of the game",
   "menu.substratum.ready": "READY",
   "menu.substratum.unready": "NOT READY",
   "menu.substratum.return": "RETURN",

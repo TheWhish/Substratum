@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap
 object SanityTracker {
     const val SYNC_INTERVAL = 40
     const val LIMIT = 15_000
-    private const val DARK_STEP = 2
 
     private val elapsed = ConcurrentHashMap<UUID, Int>()
 
@@ -50,7 +49,7 @@ object SanityTracker {
             return
         }
         if (player.isSpectator) return
-        val step = if (inDark(player)) DARK_STEP else 1
+        val step = if (inDark(player) && player.server.tickCount % 2 == 0) 2 else 1
         val before = ticks(player)
         val now = before + step
         elapsed[player.uuid] = now

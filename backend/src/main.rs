@@ -274,13 +274,13 @@ async fn serve_relay(mut socket: WebSocket, app: App) {
         return;
     };
     match serde_json::from_str::<Relay>(text.as_str()) {
-        Ok(Relay::Dial { token }) => dial(socket, &app, &token).await,
+        Ok(Relay::Dial { token, voice }) => dial(socket, &app, &token, voice).await,
         Ok(Relay::Accept { token, stream }) => accept(socket, &app, &token, stream),
         Err(_) => {}
     }
 }
 
-async fn dial(socket: WebSocket, app: &App, token: &str) {
+async fn dial(socket: WebSocket, app: &App, token: &str, voice: bool) {
     let route = {
         let hub = lock(&app.hub);
         hub.owner(token)
@@ -302,7 +302,7 @@ async fn dial(socket: WebSocket, app: &App, token: &str) {
         streams.waiting.insert(stream, waiting);
         stream
     };
-    let accepted = match outbox.send(ToClient::Incoming { stream }) {
+    let accepted = match outbox.send(ToClient::Incoming { stream, voice }) {
         Ok(()) => timeout(ACCEPT_TIMEOUT, receiver).await.ok().and_then(Result::ok),
         Err(_) => None,
     };

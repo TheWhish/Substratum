@@ -7,6 +7,7 @@ import net.minecraft.world.food.FoodProperties
 import net.minecraft.world.item.Item
 import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.item.AlmondWaterItem
+import xyz.thewhish.substratum.item.FlashlightItem
 
 object ModItems {
     private val ITEMS: DeferredRegister<Item> = DeferredRegister.create(Substratum.ID, Registries.ITEM)
@@ -19,6 +20,8 @@ object ModItems {
 
     val ALMOND_WATER: RegistrySupplier<Item> =
         ITEMS.register("almond_water") { AlmondWaterItem(Item.Properties().stacksTo(4).food(ALMOND_WATER_FOOD)) }
+
+    val FLASHLIGHT: RegistrySupplier<Item> = ITEMS.register("flashlight") { FlashlightItem(Item.Properties().stacksTo(1)) }
 
     fun register() {
         ITEMS.register()

@@ -2,7 +2,9 @@ package xyz.thewhish.substratum.client.menu
 
 import dev.architectury.event.CompoundEventResult
 import dev.architectury.event.events.client.ClientGuiEvent
+import dev.architectury.event.events.client.ClientLifecycleEvent
 import net.minecraft.client.gui.components.Button
+import net.minecraft.client.gui.components.OptionsList
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Tooltip
 import net.minecraft.client.gui.screens.DisconnectedScreen
@@ -10,6 +12,7 @@ import net.minecraft.client.gui.screens.PauseScreen
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.gui.screens.TitleScreen
 import net.minecraft.client.gui.screens.options.OptionsScreen
+import net.minecraft.client.gui.screens.options.VideoSettingsScreen
 import net.minecraft.network.chat.Component
 import net.minecraft.sounds.Music
 import qouteall.imm_ptl.core.miscellaneous.IPortalInitialScreen
@@ -41,11 +44,27 @@ object Menus {
                 else -> CompoundEventResult.pass()
             }
         }
-        ClientGuiEvent.INIT_POST.register { screen, _ -> if (screen is OptionsScreen) lockLanguage(screen) }
+        ClientLifecycleEvent.CLIENT_STARTED.register { it.options.gamma().set(0.0) }
+        ClientGuiEvent.INIT_POST.register { screen, _ ->
+            when (screen) {
+                is OptionsScreen -> lockLanguage(screen)
+                is VideoSettingsScreen -> lockBrightness(screen)
+            }
+        }
         ClientGuiEvent.RENDER_POST.register { screen: Screen?, graphics, _, _, _ ->
             if (screen != null) Loading.renderScreen(graphics, screen)
         }
         ClientGuiEvent.RENDER_HUD.register { graphics, _ -> Loading.renderHud(graphics) }
+    }
+
+    private fun lockBrightness(screen: VideoSettingsScreen) {
+        val gamma = Minecraft.getInstance().options.gamma()
+        screen.children().filterIsInstance<OptionsList>().forEach { list ->
+            list.findOption(gamma)?.let {
+                it.active = false
+                it.setTooltip(Tooltip.create(Component.translatable("menu.substratum.brightness")))
+            }
+        }
     }
 
     private fun lockLanguage(screen: OptionsScreen) {

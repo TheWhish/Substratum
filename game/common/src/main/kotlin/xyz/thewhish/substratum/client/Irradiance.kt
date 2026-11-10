@@ -19,10 +19,8 @@ object Irradiance {
     private const val EYE_Y = MazeChunkGenerator.FLOOR_Y + 2.5
     private const val NEAR = 6
     private const val BOUNCE = 1.0f
-    private const val EXPOSURE = 0.6f
+    const val EXPOSURE = 0.6f
     private const val STEPS_PER_BLOCK = 2
-
-    private val BAYER = floatArrayOf(0.125f, 0.625f, 0.875f, 0.375f)
 
     fun direct(
         open: BooleanArray,
@@ -83,10 +81,6 @@ object Irradiance {
     }
 
     fun lift(energy: Float): Float = (BRIGHT - DARK) * sqrt(1 - exp(-EXPOSURE * energy.coerceAtLeast(0f)))
-
-    fun level(energy: Float, dither: Float): Int = minOf(BRIGHT, DARK + floor(lift(energy) + dither).toInt())
-
-    fun dither(x: Int, y: Int, z: Int): Float = BAYER[(((x xor y) and 1) shl 1) or ((z xor y) and 1)]
 
     private fun sees(open: BooleanArray, depth: Int, ai: Int, aj: Int, bi: Int, bj: Int): Boolean {
         val di = bi - ai

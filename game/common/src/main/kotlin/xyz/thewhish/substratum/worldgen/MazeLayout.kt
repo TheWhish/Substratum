@@ -88,6 +88,8 @@ class MazeLayout(val seed: Long) {
         private const val DARK_DIM_RATE = 0x8000
 
         private const val SALT_ALMOND = 0x4E15
+        private const val SALT_FLASHLIGHT = 0x4E17
+        private const val FLASHLIGHT_SHARE = 0x3333
         private const val ALMOND_RATE = 0x6000
         private const val DARK_ALMOND_RATE = 0xD000
         private const val HIDEOUT_DEPTH = 3
@@ -542,6 +544,9 @@ class MazeLayout(val seed: Long) {
         }
         return placed && isHideout(cellX, cellZ, mouth)
     }
+
+    fun flashlightAt(x: Int, z: Int): Boolean =
+        ((seedFor(seed, Math.floorDiv(x, CELL), Math.floorDiv(z, CELL), SALT_FLASHLIGHT) ushr 17) and 0xFFFF) < FLASHLIGHT_SHARE
 
     internal fun isHideout(cellX: Int, cellZ: Int): Boolean {
         val mouth = openSide(cellX, cellZ)

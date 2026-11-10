@@ -4,9 +4,7 @@ import com.mojang.blaze3d.platform.GlStateManager
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.core.BlockPos
-import net.minecraft.core.SectionPos
 import net.minecraft.world.level.ChunkPos
-import net.minecraft.world.level.LightLayer
 import net.minecraft.world.phys.Vec3
 import org.joml.FrustumIntersection
 import org.joml.Matrix4f
@@ -29,6 +27,8 @@ object LightVolume {
     const val HEIGHT = 16
     const val BASE_Y = MazeChunkGenerator.FLOOR_Y
     const val UNIT = 11
+    const val FIELD_UNIT = 13
+    const val OWNER_UNIT = 14
     private const val TILE_UNIT = 9
     private const val TILE = 64
 
@@ -43,8 +43,15 @@ object LightVolume {
     private const val SLOTS = SIDE / 16
     private const val UPLOADS_PER_FRAME = 24
     private const val EMPTY = Long.MIN_VALUE
+    private const val NO_OWNER = Int.MIN_VALUE
+    private const val CLOSED = -1f
+    private const val OPEN: Byte = -1
 
     private var texture = -1
+    var visibleLamps = 0
+        private set
+    private var field = -1
+    private var owners = -1
     private var lampBuffer = -1
     private val lampData = MemoryUtil.memAllocFloat(LAMPS * 4)
     private var tileTexture = -1
@@ -65,23 +72,50 @@ object LightVolume {
     private const val FLOOR_CELLS = 16 * 16
     private val column = MemoryUtil.memAlloc(FLOOR_CELLS * HEIGHT)
     private val scratch = ByteArray(FLOOR_CELLS * HEIGHT)
+    private val energy = MemoryUtil.memAllocFloat(FLOOR_CELLS)
+    private val ownerData = IntArray(SLOTS * SLOTS * 2) { NO_OWNER }
+    private val ownerBuffer = MemoryUtil.memAllocInt(SLOTS * SLOTS * 2)
+    private var ownersChanged = true
 
     fun markDirty(cx: Int, cz: Int) {
         dirty.add(ChunkPos.asLong(cx, cz))
     }
 
     fun update(level: ClientLevel, centre: ChunkPos, radius: Int) {
-        if (texture < 0) texture = create()
+        if (texture < 0) create()
         if (level !== this.level) {
             this.level = level
             slots.fill(EMPTY)
             dirty.clear()
+            ownerData.fill(NO_OWNER)
+            ownersChanged = true
         }
-        dirty.removeIf(LongPredicate { key ->
-            val far = maxOf(Math.abs(ChunkPos.getX(key) - centre.x), Math.abs(ChunkPos.getZ(key) - centre.z)) > radius
-            if (far && slots[slot(ChunkPos.getX(key), ChunkPos.getZ(key))] == key) slots[slot(ChunkPos.getX(key), ChunkPos.getZ(key))] = EMPTY
-            far
-        })
+        dirty.removeIf(LongPredicate { distance(it, centre) > radius })
+        for (slot in slots.indices) {
+            val key = slots[slot]
+            if (key == EMPTY || distance(key, centre) <= radius) continue
+            slots[slot] = EMPTY
+            own(ChunkPos.getX(key), ChunkPos.getZ(key), false)
+        }
+        uploadNear(level, centre, radius)
+        if (ownersChanged) uploadOwners()
+    }
+
+    fun covers(level: ClientLevel): Boolean = level === this.level && field >= 0
+
+    fun bindTerrain() {
+        if (field < 0) return
+        val active = GlStateManager._getActiveTexture()
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + FIELD_UNIT)
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, field)
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + OWNER_UNIT)
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, owners)
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + UNIT)
+        GL11.glBindTexture(GL12.GL_TEXTURE_3D, texture)
+        GL13.glActiveTexture(active)
+    }
+
+    private fun uploadNear(level: ClientLevel, centre: ChunkPos, radius: Int) {
         var uploads = 0
         for (ring in 0..radius) for (cx in centre.x - ring..centre.x + ring) for (cz in centre.z - ring..centre.z + ring) {
             if (maxOf(Math.abs(cx - centre.x), Math.abs(cz - centre.z)) != ring) continue
@@ -92,6 +126,9 @@ object LightVolume {
             if (++uploads == UPLOADS_PER_FRAME) return
         }
     }
+
+    private fun distance(key: Long, centre: ChunkPos): Int =
+        maxOf(Math.abs(ChunkPos.getX(key) - centre.x), Math.abs(ChunkPos.getZ(key) - centre.z))
 
     fun selectLamps(level: ClientLevel, camera: Vec3) {
         nearest.clear()
@@ -130,6 +167,7 @@ object LightVolume {
             cover(shown, x, y, z)
             shown++
         }
+        visibleLamps = shown
         while (lampData.hasRemaining()) lampData.put(0f)
         lampData.flip()
         if (lampBuffer < 0) lampBuffer = GL15.glGenBuffers()
@@ -237,8 +275,6 @@ object LightVolume {
 
     fun unbind() {
         val active = GlStateManager._getActiveTexture()
-        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT)
-        GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0)
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + TILE_UNIT)
         GlStateManager._bindTexture(0)
         GlStateManager._activeTexture(active)
@@ -257,22 +293,10 @@ object LightVolume {
         val key = ChunkPos.asLong(cx, cz)
         dirty.remove(key)
         slots[slot(cx, cz)] = key
-        val engine = level.lightEngine.getLayerListener(LightLayer.BLOCK)
-        for (y in 0 until HEIGHT) {
-            val worldY = BASE_Y + y
-            val layer = engine.getDataLayerData(SectionPos.of(cx, worldY shr 4, cz))
-            val row = y * FLOOR_CELLS
-            if (layer == null || layer.isDefinitelyHomogenous) {
-                scratch.fill(((layer?.get(0, 0, 0) ?: 0) * 17).toByte(), row, row + FLOOR_CELLS)
-                continue
-            }
-            val data = layer.data
-            val from = (worldY and 15) * FLOOR_CELLS / 2
-            for (i in 0 until FLOOR_CELLS / 2) {
-                val pair = data[from + i].toInt()
-                scratch[row + 2 * i] = ((pair and 0xF) * 17).toByte()
-                scratch[row + 2 * i + 1] = ((pair shr 4 and 0xF) * 17).toByte()
-            }
+        val spans = LightField.spansAt(level, cx, cz)
+        for (y in 0 until HEIGHT) for (lz in 0 until 16) for (lx in 0 until 16) {
+            val open = spans != null && LightField.open(spans[lx * 16 + lz], BASE_Y + y)
+            scratch[y * FLOOR_CELLS + lz * 16 + lx] = if (open) OPEN else 0
         }
         column.clear()
         column.put(scratch).flip()
@@ -282,6 +306,41 @@ object LightVolume {
         GL12.glTexSubImage3D(GL12.GL_TEXTURE_3D, 0, Math.floorMod(cx, SLOTS) * 16, Math.floorMod(cz, SLOTS) * 16, 0, 16, 16, HEIGHT, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, column)
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0)
         GlStateManager._activeTexture(active)
+        val cells = LightField.fieldAt(cx, cz)
+        if (cells == null || spans == null) {
+            own(cx, cz, false)
+            return
+        }
+        energy.clear()
+        for (lz in 0 until 16) for (lx in 0 until 16) energy.put(if (spans[lx * 16 + lz] < 0) CLOSED else cells[lx * 16 + lz])
+        energy.flip()
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + FIELD_UNIT)
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, field)
+        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, Math.floorMod(cx, SLOTS) * 16, Math.floorMod(cz, SLOTS) * 16, 16, 16, GL11.GL_RED, GL11.GL_FLOAT, energy)
+        GL13.glActiveTexture(active)
+        own(cx, cz, true)
+    }
+
+    private fun own(cx: Int, cz: Int, valid: Boolean) {
+        val index = (Math.floorMod(cz, SLOTS) * SLOTS + Math.floorMod(cx, SLOTS)) * 2
+        val x = if (valid) cx else NO_OWNER
+        val z = if (valid) cz else NO_OWNER
+        if (ownerData[index] == x && ownerData[index + 1] == z) return
+        ownerData[index] = x
+        ownerData[index + 1] = z
+        ownersChanged = true
+    }
+
+    private fun uploadOwners() {
+        ownerBuffer.clear()
+        ownerBuffer.put(ownerData).flip()
+        tightUnpack()
+        val active = GlStateManager._getActiveTexture()
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + OWNER_UNIT)
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, owners)
+        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, SLOTS, SLOTS, GL30.GL_RG_INTEGER, GL11.GL_INT, ownerBuffer)
+        GL13.glActiveTexture(active)
+        ownersChanged = false
     }
 
     private fun tightUnpack() {
@@ -295,11 +354,11 @@ object LightVolume {
 
     private fun slot(cx: Int, cz: Int): Int = Math.floorMod(cx, SLOTS) * SLOTS + Math.floorMod(cz, SLOTS)
 
-    private fun create(): Int {
-        val id = GL11.glGenTextures()
+    private fun create() {
         val active = GlStateManager._getActiveTexture()
+        texture = GL11.glGenTextures()
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT)
-        GL11.glBindTexture(GL12.GL_TEXTURE_3D, id)
+        GL11.glBindTexture(GL12.GL_TEXTURE_3D, texture)
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR)
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR)
         GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT)
@@ -311,6 +370,23 @@ object LightVolume {
         MemoryUtil.memFree(zeros)
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0)
         GlStateManager._activeTexture(active)
+        field = flat(FIELD_UNIT, GL30.GL_R16F, SIDE, GL11.GL_RED, GL11.GL_FLOAT)
+        owners = flat(OWNER_UNIT, GL30.GL_RG32I, SLOTS, GL30.GL_RG_INTEGER, GL11.GL_INT)
+        ownersChanged = true
+    }
+
+    private fun flat(unit: Int, format: Int, side: Int, layout: Int, type: Int): Int {
+        val active = GlStateManager._getActiveTexture()
+        val id = GL11.glGenTextures()
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit)
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, id)
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST)
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST)
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT)
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT)
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LEVEL, 0)
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, format, side, side, 0, layout, type, 0L)
+        GL13.glActiveTexture(active)
         return id
     }
 }

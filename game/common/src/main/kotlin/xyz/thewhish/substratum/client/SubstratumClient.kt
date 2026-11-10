@@ -31,6 +31,7 @@ object SubstratumClient {
         Launcher.require()
         Menus.init()
         Bench.register()
+        Probe.register()
         MenuShot.register()
         ClientTickEvent.CLIENT_POST.register(Lobby::tick)
         RenderTypeRegistry.register(RenderType.cutout(), ModBlocks.ALMOND_WATER.get())
@@ -43,6 +44,7 @@ object SubstratumClient {
         ClientTickEvent.CLIENT_POST.register(::preparePortalWorlds)
         ClientTickEvent.CLIENT_POST.register(LampHum::tick)
         LightField.init()
+        FlashlightSwitch.register()
         ClientTickEvent.CLIENT_POST.register(LightField::tick)
         ClientTickEvent.CLIENT_POST.register(LampFlicker::tick)
         ClientTickEvent.CLIENT_POST.register(BackroomsLight::tick)
@@ -75,6 +77,7 @@ object SubstratumClient {
             Feed.reset()
             ProbeView.reset()
             Atmosphere.forget()
+            FlashlightSwitch.reset()
         }
     }
 

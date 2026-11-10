@@ -157,6 +157,20 @@ object ModBlocks {
         )
     }
 
+    val FLASHLIGHT: RegistrySupplier<Block> = BLOCKS.register("flashlight") {
+        FlashlightBlock(
+            BlockBehaviour.Properties.of()
+                .mapColor(MapColor.NONE)
+                .instabreak()
+                .noCollission()
+                .noOcclusion()
+                .offsetType(BlockBehaviour.OffsetType.XZ)
+                .sound(SoundType.METAL)
+                .pushReaction(PushReaction.DESTROY)
+                .noLootTable()
+        )
+    }
+
     fun dampCarpet(clean: Boolean): BlockState = DAMP_CARPET.get().defaultBlockState().setValue(CLEAN, clean)
 
     fun ceilingTile(clean: Boolean): BlockState = CEILING_TILE.get().defaultBlockState().setValue(CLEAN, clean)
@@ -285,6 +299,26 @@ object ModBlocks {
         }
     }
 
+    private class FlashlightBlock(properties: Properties) : Block(properties) {
+        override fun getShape(state: BlockState, level: BlockGetter, pos: BlockPos, context: CollisionContext): VoxelShape {
+            val offset = state.getOffset(level, pos)
+            return FLASHLIGHT_SHAPE.move(offset.x, offset.y, offset.z)
+        }
+
+        override fun getCloneItemStack(level: LevelReader, pos: BlockPos, state: BlockState): ItemStack =
+            ItemStack(ModItems.FLASHLIGHT.get())
+
+        override fun useWithoutItem(state: BlockState, level: Level, pos: BlockPos, player: Player, hit: BlockHitResult): InteractionResult {
+            if (level.isClientSide) return InteractionResult.SUCCESS
+            level.removeBlock(pos, false)
+            BackroomsGuard.resyncRemoteWatchersAfterCrossPortalEdit(level, pos)
+            player.inventory.placeItemBackInInventory(ItemStack(ModItems.FLASHLIGHT.get()))
+            val pitch = ((level.random.nextFloat() - level.random.nextFloat()) * 0.7f + 1f) * 2f
+            level.playSound(null, pos, SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f, pitch)
+            return InteractionResult.CONSUME
+        }
+    }
+
     private class PitVoidBlock(properties: Properties) : Block(properties) {
         override fun entityInside(state: BlockState, level: Level, pos: BlockPos, entity: Entity) {
             if (entity is ServerPlayer) PitExitGuard.onShaftEntered(entity, pos)
@@ -324,4 +358,6 @@ object ModBlocks {
     private const val LAMP_CRACKLE_CHANCE = 1f / 14
 
     private val BOTTLE_SHAPE: VoxelShape = Block.box(5.0, 0.0, 5.0, 11.0, 8.0, 11.0)
+
+    private val FLASHLIGHT_SHAPE: VoxelShape = Block.box(4.5, 0.0, 4.5, 11.5, 2.5, 11.5)
 }

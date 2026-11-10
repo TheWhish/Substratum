@@ -1,7 +1,6 @@
 package xyz.thewhish.substratum.client
 
 import net.minecraft.client.Camera
-import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.world.effect.MobEffects
 import net.minecraft.world.entity.LivingEntity
@@ -41,8 +40,5 @@ object DepthFog {
     fun haze(partialTick: Float): Float = END * (1f - SanityEffects.closeIn(partialTick))
 
     @JvmStatic
-    fun colour(index: Int): Float {
-        val minecraft = Minecraft.getInstance()
-        return UNLIT * BackroomsLight.tinted(BackroomsLight.brightness(minecraft, Irradiance.DARK.toFloat()), index)
-    }
+    fun colour(index: Int): Float = UNLIT * BackroomsLight.tinted(BackroomsLight.brightness(Irradiance.DARK.toFloat()), index)
 }

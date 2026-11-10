@@ -38,7 +38,7 @@ object Atmosphere {
     private const val BLOOM_HEIGHT = 1440f
     private const val GRAIN = 0.035f
     private const val GAIN = 30f
-    private const val HAZE = 0.11f
+    private const val HAZE = 0.13f
     private const val EMISSION = 1f
     private const val SECONDS_WRAP = 3600f
     private const val PORTALS = 8
@@ -79,6 +79,12 @@ object Atmosphere {
         val grade: Pass get() = film.first()
         private val portals = GL20.glGetUniformLocation(light.effect.id, "Portals")
         private val portalCount = GL20.glGetUniformLocation(light.effect.id, "PortalCount")
+        private val beams = GL20.glGetUniformLocation(light.effect.id, "Beams")
+        private val beamCount = GL20.glGetUniformLocation(light.effect.id, "BeamCount")
+        private val beamCone = GL20.glGetUniformLocation(light.effect.id, "BeamCone")
+        private val beamReach = GL20.glGetUniformLocation(light.effect.id, "BeamReach")
+        private val capsules = GL20.glGetUniformLocation(light.effect.id, "Capsules")
+        private val capsuleCount = GL20.glGetUniformLocation(light.effect.id, "CapsuleCount")
 
         fun run(passes: List<Pass>) {
             GlStateManager._glBindVertexArray(vao)
@@ -91,6 +97,17 @@ object Atmosphere {
             GlStateManager._glUseProgram(light.effect.id)
             if (count > 0) GL20.glUniform4fv(portals, data)
             GL20.glUniform1i(portalCount, count)
+            GlStateManager._glUseProgram(0)
+        }
+
+        fun movers(beamData: FloatBuffer, beamTotal: Int, capsuleData: FloatBuffer, capsuleTotal: Int) {
+            GlStateManager._glUseProgram(light.effect.id)
+            if (beamTotal > 0) GL20.glUniform4fv(beams, beamData)
+            GL20.glUniform1i(beamCount, beamTotal)
+            GL20.glUniform3f(beamCone, Flashlights.COS_INNER, Flashlights.COS_OUTER, Flashlights.NEAR)
+            GL20.glUniform2f(beamReach, Flashlights.FADE_FROM, Flashlights.RANGE)
+            if (capsuleTotal > 0) GL20.glUniform4fv(capsules, capsuleData)
+            GL20.glUniform1i(capsuleCount, capsuleTotal)
             GlStateManager._glUseProgram(0)
         }
 
@@ -129,6 +146,8 @@ object Atmosphere {
     private val viewProjection = Matrix4f()
     private val corner = Vector4f()
     private val portalData = MemoryUtil.memAllocFloat(PORTALS * 12)
+    private val beamData = MemoryUtil.memAllocFloat(Flashlights.MAX * 8)
+    private val capsuleData = MemoryUtil.memAllocFloat(Capsules.MAX * 8)
 
     private val irisInUse: (() -> Boolean)? by lazy {
         if (!Platform.isModLoaded("iris")) return@lazy null
@@ -206,6 +225,7 @@ object Atmosphere {
         val bounds = portalBounds(camera, view, projection, main)
         if (bounds != null && (bounds[2] <= bounds[0] || bounds[3] <= bounds[1])) return
         LightVolume.selectLamps(level, camera.position)
+        LightVolume.update(level, ChunkPos(camera.blockPosition), SubstratumLevels.SIGHT_CHUNKS)
         scissor(bounds, current.light.target, main)
         light(current, level, camera, view, projection, strength)
         if (bounds != null) RenderSystem.disableScissor()
@@ -276,9 +296,9 @@ object Atmosphere {
     private fun light(current: Chain, level: ClientLevel, camera: Camera, view: Matrix4f, projection: Matrix4f, strength: Float) {
         val position = camera.position
         viewProjection.set(projection).mul(view)
-        LightVolume.update(level, ChunkPos(camera.blockPosition), SubstratumLevels.SIGHT_CHUNKS)
         LightVolume.uploadLamps(position, viewProjection, current.light.target.width, current.light.target.height)
         foreignPortals(current, level, position)
+        movers(current, position)
         current.light.effect.apply {
             safeGetUniform("InvViewProj").set(viewProjection.invert())
             safeGetUniform("Camera").set(wrap(position.x), (position.y - LightVolume.BASE_Y).toFloat(), wrap(position.z))
@@ -309,6 +329,20 @@ object Atmosphere {
         current.foreign(portalData, count)
     }
 
+    private fun movers(current: Chain, camera: Vec3) {
+        beamData.clear()
+        for (i in 0 until Flashlights.count) {
+            val beam = Flashlights.beams[i]
+            beamData.put((beam.x - camera.x).toFloat()).put((beam.y - camera.y).toFloat()).put((beam.z - camera.z).toFloat()).put(beam.power)
+            beamData.put(beam.direction.x).put(beam.direction.y).put(beam.direction.z).put(beam.haze)
+        }
+        beamData.flip()
+        capsuleData.clear()
+        Capsules.write(camera.x, camera.y, camera.z) { capsuleData.put(it) }
+        capsuleData.flip()
+        current.movers(beamData, Flashlights.count, capsuleData, Capsules.count)
+    }
+
     private fun put(vector: Vec3) {
         portalData.put(vector.x.toFloat()).put(vector.y.toFloat()).put(vector.z.toFloat()).put(0f)
     }
@@ -334,6 +368,7 @@ object Atmosphere {
             safeGetUniform("Hands").set(if (hands) 1f else 0f)
             safeGetUniform("Strength").set(strength)
             safeGetUniform("Bloom").set(BLOOM * glare)
+            safeGetUniform("Dazzle").set(Flashlights.dazzle * strength)
         }
         current.grade.effect.apply {
             safeGetUniform("Time").set(seconds)

@@ -17,7 +17,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import xyz.thewhish.substratum.client.Atmosphere;
 import xyz.thewhish.substratum.client.MenuShot;
+import xyz.thewhish.substratum.client.Probe;
 import xyz.thewhish.substratum.client.ProbeView;
+import xyz.thewhish.substratum.client.TerrainLight;
 import xyz.thewhish.substratum.smiler.client.Vanish;
 
 @Mixin(GameRenderer.class)
@@ -41,11 +43,16 @@ abstract class AtmosphereMixin {
         Matrix4f projection,
         Operation<Void> original
     ) {
+        Probe.push("вид мира");
+        TerrainLight.beforeWorld(this.minecraft, camera, deltaTracker.getGameTimeDeltaPartialTick(false));
         original.call(renderer, deltaTracker, renderBlockOutline, camera, gameRenderer, lightTexture, view, projection);
+        TerrainLight.afterWorld();
+        Probe.popPush("Substratum: свет ламп и дымка");
         ProbeView.capture(camera, view, projection);
         MenuShot.afterWorld(camera, view, projection);
         Vanish.afterFrame(camera);
         Atmosphere.renderWorld(this.minecraft, deltaTracker.getGameTimeDeltaPartialTick(false), camera, view, projection, this.renderHand);
+        Probe.pop();
     }
 
     @Inject(method = "render", at = @At("HEAD"))
@@ -58,6 +65,8 @@ abstract class AtmosphereMixin {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/LevelRenderer;doEntityOutline()V", shift = At.Shift.AFTER)
     )
     private void substratum$atmosphere(DeltaTracker deltaTracker, boolean renderLevel, CallbackInfo ci) {
+        Probe.push("Substratum: свечение и плёнка");
         Atmosphere.render(this.minecraft, deltaTracker.getGameTimeDeltaTicks(), deltaTracker.getGameTimeDeltaPartialTick(false));
+        Probe.pop();
     }
 }

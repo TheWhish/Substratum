@@ -21,6 +21,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::http::Uri;
 
 use crate::direct::{self, Direct};
+use crate::voice::{self, Local, Relayed, Tunnel};
 
 const BACKEND: &str = "wss://substratum.thewhish.xyz";
 const RETRY_FIRST: Duration = Duration::from_secs(1);
@@ -74,6 +75,7 @@ enum FromGame {
     Start,
     Opened { port: u16 },
     Ended,
+    Voice { port: Option<u16> },
 }
 
 #[derive(Serialize)]
@@ -83,6 +85,7 @@ enum ToGame<'a> {
         me: &'a str,
         team: Option<&'a Team>,
         door: Option<u16>,
+        voice: Option<u16>,
     },
     Refused {
         reason: Refusal,
@@ -110,8 +113,17 @@ enum Route {
 
 struct Door {
     port: u16,
+    voice: u16,
     task: JoinHandle<()>,
+    speaker: JoinHandle<()>,
     route: Arc<watch::Sender<Route>>,
+}
+
+impl Drop for Door {
+    fn drop(&mut self) {
+        self.task.abort();
+        self.speaker.abort();
+    }
 }
 
 pub fn start(
@@ -180,6 +192,7 @@ struct Core {
     team: Option<Team>,
     presence: Presence,
     world: Option<u16>,
+    voice: watch::Sender<Option<u16>>,
     door: Option<Door>,
 }
 
@@ -206,6 +219,7 @@ impl Core {
             team: None,
             presence: Presence::Away,
             world: None,
+            voice: watch::channel(None).0,
             door: None,
         }
     }
@@ -257,7 +271,7 @@ impl Core {
                 self.send_game(&ToGame::Refused { reason });
                 self.publish(Some(reason));
             }
-            Event::Server(ToClient::Incoming { stream }) => self.accept(stream),
+            Event::Server(ToClient::Incoming { stream, voice }) => self.accept(stream, voice),
             Event::Server(ToClient::Punch { peer, address }) => self.punch(&peer, address),
             Event::Peer(connection, peer) => self.admit(connection, &peer),
             Event::Routed => self.publish(None),
@@ -269,6 +283,7 @@ impl Core {
             Event::GameGone => {
                 self.game = None;
                 self.world = None;
+                self.voice.send_replace(None);
                 self.presence = Presence::Away;
                 self.tell(ToServer::Presence {
                     presence: Presence::Away,
@@ -295,6 +310,9 @@ impl Core {
             FromGame::Ended => {
                 self.world = None;
                 self.tell(ToServer::Ended);
+            }
+            FromGame::Voice { port } => {
+                self.voice.send_replace(port);
             }
         }
     }
@@ -333,6 +351,7 @@ impl Core {
             me: &self.me,
             team: self.team.as_ref(),
             door: self.door.as_ref().map(|door| door.port),
+            voice: self.door.as_ref().map(|door| door.voice),
         };
         self.send_game(&state);
     }
@@ -351,53 +370,64 @@ impl Core {
                 && team.session.as_ref().is_some_and(|session| session.open)
         });
         match (wanted, &self.door) {
-            (true, None) => {
-                match std::net::TcpListener::bind(("127.0.0.1", 0)).and_then(|listener| {
-                    listener.set_nonblocking(true)?;
-                    TcpListener::from_std(listener)
-                }) {
-                    Ok(listener) => {
-                        let port = listener
-                            .local_addr()
-                            .map(|address| address.port())
-                            .unwrap_or(0);
-                        let initial = match self.direct {
-                            Some(_) => Route::Pending,
-                            None => Route::Relay,
-                        };
-                        let route = Arc::new(watch::channel(initial).0);
-                        let receiver = route.subscribe();
-                        let door =
-                            serve_door(listener, self.url.clone(), self.token.clone(), receiver);
-                        let task = tokio::spawn(door);
-                        if self.direct.is_some() {
-                            tokio::spawn(settle(route.clone(), self.events.clone()));
-                            self.tell(ToServer::Punch);
-                        }
-                        self.door = Some(Door { port, task, route });
-                    }
-                    Err(error) => eprintln!("failed to open the door to the host: {error}"),
-                }
-            }
-            (false, Some(_)) => {
-                if let Some(door) = self.door.take() {
-                    door.task.abort();
-                }
-            }
+            (true, None) => match self.open_door() {
+                Ok(door) => self.door = Some(door),
+                Err(error) => eprintln!("failed to open the door to the host: {error}"),
+            },
+            (false, Some(_)) => self.door = None,
             _ => {}
         }
     }
 
-    fn reconcile_peers(&mut self) {
-        let hosting = self.world.is_some()
-            && self.team.as_ref().is_some_and(|team| {
-                team.host == self.me && team.session.as_ref().is_some_and(|session| session.open)
-            });
-        if !hosting {
-            for peer in self.peers.drain(..) {
-                peer.close(0u32.into(), b"the game is over");
-            }
+    fn open_door(&self) -> std::io::Result<Door> {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
+        listener.set_nonblocking(true)?;
+        let listener = TcpListener::from_std(listener)?;
+        let port = listener.local_addr()?.port();
+        let speaker = std::net::UdpSocket::bind(("127.0.0.1", 0))?;
+        speaker.set_nonblocking(true)?;
+        let speaker = UdpSocket::from_std(speaker)?;
+        let voice = speaker.local_addr()?.port();
+        let initial = match self.direct {
+            Some(_) => Route::Pending,
+            None => Route::Relay,
+        };
+        let route = Arc::new(watch::channel(initial).0);
+        let (url, token) = (self.url.clone(), self.token.clone());
+        let task = tokio::spawn(serve_door(
+            listener,
+            url.clone(),
+            token.clone(),
+            route.subscribe(),
+        ));
+        let speaker = tokio::spawn(speak(speaker, url, token, route.subscribe()));
+        if self.direct.is_some() {
+            tokio::spawn(settle(route.clone(), self.events.clone()));
+            self.tell(ToServer::Punch);
         }
+        Ok(Door {
+            port,
+            voice,
+            task,
+            speaker,
+            route,
+        })
+    }
+
+    fn reconcile_peers(&mut self) {
+        let hosted = self.team.as_ref().filter(|team| {
+            self.world.is_some()
+                && team.host == self.me
+                && team.session.as_ref().is_some_and(|session| session.open)
+        });
+        self.peers.retain(|peer| {
+            let welcome = hosted
+                .is_some_and(|team| direct::peer(peer).is_some_and(|uuid| team.takes_part(&uuid)));
+            if !welcome {
+                peer.close(0u32.into(), b"not a participant");
+            }
+            welcome && peer.close_reason().is_none()
+        });
     }
 
     fn signal(&mut self, beacon: &str) {
@@ -449,18 +479,41 @@ impl Core {
             return;
         };
         self.peers.push(connection.clone());
-        tokio::spawn(direct::serve(connection, world));
+        tokio::spawn(direct::serve(connection.clone(), world));
+        let server = self.voice.subscribe();
+        tokio::spawn(async move {
+            if let Err(error) = voice::host(Tunnel::Direct(connection), server).await {
+                eprintln!("direct voice from a guest failed: {error}");
+            }
+        });
     }
 
-    fn accept(&self, stream: u64) {
+    fn accept(&self, stream: u64, voice: bool) {
         let Some(port) = self.world else {
             return;
         };
-        let (url, token) = (self.url.clone(), self.token.clone());
+        let url = self.url.clone();
+        let hello = Relay::Accept {
+            token: self.token.clone(),
+            stream,
+        };
+        if voice {
+            let server = self.voice.subscribe();
+            tokio::spawn(async move {
+                let result = async {
+                    let tunnel = Tunnel::Relay(Box::new(connect_relay(&url, &hello).await?));
+                    voice::host(tunnel, server).await
+                };
+                if let Err(error) = result.await {
+                    eprintln!("voice relay to the local world failed: {error}");
+                }
+            });
+            return;
+        }
         tokio::spawn(async move {
             let result = async {
                 let local = TcpStream::connect(("127.0.0.1", port)).await?;
-                relay(&url, Relay::Accept { token, stream }, local).await
+                relay(&url, &hello, local).await
             };
             if let Err(error) = result.await {
                 eprintln!("relay to the local world failed: {error}");
@@ -639,10 +692,53 @@ async fn serve_door(
                 }
                 return;
             }
-            if let Err(error) = relay(&url, Relay::Dial { token }, local).await {
+            let hello = Relay::Dial {
+                token,
+                voice: false,
+            };
+            if let Err(error) = relay(&url, &hello, local).await {
                 eprintln!("relay to the host failed: {error}");
             }
         });
+    }
+}
+
+async fn speak(socket: UdpSocket, url: String, token: String, mut route: watch::Receiver<Route>) {
+    let mut delay = RETRY_FIRST;
+    loop {
+        let Ok(chosen) = route
+            .wait_for(|route| !matches!(route, Route::Pending))
+            .await
+            .map(|route| route.clone())
+        else {
+            return;
+        };
+        let began = Instant::now();
+        let result: Result<(), Failure> = async {
+            let tunnel = match chosen {
+                Route::Direct(connection) if connection.close_reason().is_none() => {
+                    Tunnel::Direct(connection)
+                }
+                _ => {
+                    socket.readable().await?;
+                    let hello = Relay::Dial {
+                        token: token.clone(),
+                        voice: true,
+                    };
+                    Tunnel::Relay(Box::new(connect_relay(&url, &hello).await?))
+                }
+            };
+            voice::pump(&socket, Local::Game(None), tunnel).await
+        }
+        .await;
+        if let Err(error) = result {
+            eprintln!("voice tunnel to the host failed: {error}");
+        }
+        if began.elapsed() > RETRY_MAX {
+            delay = RETRY_FIRST;
+        }
+        tokio::time::sleep(delay).await;
+        delay = (delay * 2).min(RETRY_MAX);
     }
 }
 
@@ -713,14 +809,19 @@ async fn beam(socket: &UdpSocket, url: &str, beacon: &[u8]) -> Result<(), Failur
     Ok(())
 }
 
-async fn relay(url: &str, hello: Relay, local: TcpStream) -> Result<(), Failure> {
-    local.set_nodelay(true)?;
-    let (socket, _) =
+async fn connect_relay(url: &str, hello: &Relay) -> Result<Relayed, Failure> {
+    let (mut socket, _) =
         tokio_tungstenite::connect_async_with_config(format!("{url}{RELAY_PATH}"), None, true)
             .await?;
-    let (mut sink, mut stream) = socket.split();
-    sink.send(Message::text(serde_json::to_string(&hello)?))
+    socket
+        .send(Message::text(serde_json::to_string(hello)?))
         .await?;
+    Ok(socket)
+}
+
+async fn relay(url: &str, hello: &Relay, local: TcpStream) -> Result<(), Failure> {
+    local.set_nodelay(true)?;
+    let (mut sink, mut stream) = connect_relay(url, hello).await?.split();
     let (mut from_game, mut to_game) = local.into_split();
     let outgoing = async {
         let mut buffer = vec![0; RELAY_CHUNK];
@@ -830,6 +931,14 @@ mod tests {
                 });
             }
         });
+        let voice_server = UdpSocket::bind(("127.0.0.1", 0)).await.unwrap();
+        let voice_port = voice_server.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let mut buffer = [0; 64];
+            while let Ok((size, from)) = voice_server.recv_from(&mut buffer).await {
+                let _ = voice_server.send_to(&buffer[..size], from).await;
+            }
+        });
         let (host, mut host_updates) = launcher(11, "Host");
         let (guest, mut guest_updates) = launcher(12, "Guest");
         let code = loop {
@@ -865,11 +974,14 @@ mod tests {
             .until(|state| !state["team"]["session"].is_null())
             .await;
         host_game
+            .say(&format!(r#"{{"type":"voice","port":{voice_port}}}"#))
+            .await;
+        host_game
             .say(&format!(r#"{{"type":"opened","port":{world_port}}}"#))
             .await;
-        let door = guest_game.until(|state| state["door"].is_u64()).await["door"]
-            .as_u64()
-            .unwrap();
+        let state = guest_game.until(|state| state["door"].is_u64()).await;
+        let door = state["door"].as_u64().unwrap();
+        let voice = state["voice"].as_u64().unwrap() as u16;
         let mut local = TcpStream::connect(("127.0.0.1", door as u16))
             .await
             .unwrap();
@@ -877,6 +989,24 @@ mod tests {
         let mut echo = [0; 16];
         local.read_exact(&mut echo).await.unwrap();
         assert_eq!(&echo, b"through the door");
+        let microphone = UdpSocket::bind(("127.0.0.1", 0)).await.unwrap();
+        let mut heard = [0; 64];
+        let heard = tokio::time::timeout(Duration::from_secs(15), async {
+            loop {
+                microphone
+                    .send_to(b"through the air", ("127.0.0.1", voice))
+                    .await
+                    .unwrap();
+                let wait = Duration::from_millis(250);
+                if let Ok(Ok(size)) = tokio::time::timeout(wait, microphone.recv(&mut heard)).await
+                {
+                    return heard[..size].to_vec();
+                }
+            }
+        })
+        .await
+        .expect("the voice never came back from the host");
+        assert_eq!(heard, b"through the air");
         let expected = std::env::var("SUBSTRATUM_ROUTE").as_deref() != Ok("relay");
         let route = loop {
             if let Some(direct) = guest_updates.recv().await.unwrap().direct {

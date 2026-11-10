@@ -69,8 +69,8 @@ tasks.register("mixinCheck", JavaExec) {
     mainClass = "xyz.thewhish.substratum.MixinCheckKt"
     doFirst {
         def game = loom.getMinecraftJars(MappingsNamespace.INTERMEDIARY)
-        def portals = fileTree(rootProject.file("libs")) { include "immersive-portals-*.jar" }.files
-        args([remapJar.archiveFile.get().asFile.absolutePath] + game.collect { it.toAbsolutePath().toString() } + portals.collect { it.absolutePath })
+        def mods = fileTree(rootProject.file("libs")) { include "immersive-portals-*.jar", "devruntime/sodium-*.jar" }.files
+        args([remapJar.archiveFile.get().asFile.absolutePath] + game.collect { it.toAbsolutePath().toString() } + mods.collect { it.absolutePath })
     }
 }
 

@@ -13,6 +13,12 @@ uniform float Gain;
 uniform float Shade;
 uniform int PortalCount;
 uniform vec4 Portals[24];
+uniform int BeamCount;
+uniform vec4 Beams[8];
+uniform vec3 BeamCone;
+uniform vec2 BeamReach;
+uniform int CapsuleCount;
+uniform vec4 Capsules[16];
 
 layout(std140) uniform LampBlock {
     vec4 Lamp[256];
@@ -35,6 +41,21 @@ const float OPEN = 0.03;
 const float FAINT = 0.0005;
 const float GLOW_FAINT = 0.00003;
 const vec3 VOLUME = vec3(256.0, 256.0, 16.0);
+const float OCCLUSION = 0.45;
+const float NEAR_RING = 0.6;
+const float FAR_RING = 0.9;
+const float PANEL_HALF = 0.35;
+const int BEAMS = 4;
+const int BEAM_STEPS = 10;
+const int BEAM_MARCH = 72;
+const float BEAM_HAZE = 0.015;
+const float BEAM_FORWARD = 0.2;
+const float BEAM_FAINT = 0.001;
+const int CAPSULES = 8;
+const float PANEL_SIZE = 0.7;
+const float BULB_SIZE = 0.2;
+
+#moj_import <capsule.glsl>
 
 float depthAt(ivec2 texel) {
     return texelFetch(DepthSampler, clamp(texel, ivec2(0), ivec2(InSize) - 1), 0).r;
@@ -68,6 +89,23 @@ bool foreign(vec3 point) {
     return false;
 }
 
+float openness(vec3 point) {
+    vec3 cell = Camera + point;
+    if (cell.y < 0.0 || cell.y >= VOLUME.z) return 1.0;
+    return texture(LightVolume, cell.xzy / VOLUME).r;
+}
+
+float occlusion(vec3 point, vec3 normal) {
+    vec3 u = normalize(cross(normal, abs(normal.y) > 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
+    vec3 v = cross(normal, u);
+    vec3 centre = point + normal * 0.5;
+    float open = openness(centre + u * NEAR_RING) + openness(centre - u * NEAR_RING)
+        + openness(centre + v * NEAR_RING) + openness(centre - v * NEAR_RING)
+        + openness(centre + (u + v) * FAR_RING) + openness(centre + (u - v) * FAR_RING)
+        + openness(centre - (u - v) * FAR_RING) + openness(centre - (u + v) * FAR_RING);
+    return 1.0 - OCCLUSION * (1.0 - open / 8.0);
+}
+
 float visible(vec3 from, vec3 to) {
     vec3 delta = to - from;
     int steps = min(int(length(delta)), MARCH);
@@ -77,6 +115,90 @@ float visible(vec3 from, vec3 to) {
         if (!open(from + hop * float(i))) return 0.0;
     }
     return 1.0;
+}
+
+bool solid(ivec3 cell) {
+    if (cell.y < 0 || cell.y >= int(VOLUME.z)) return false;
+    return texelFetch(LightVolume, ivec3(cell.x & 255, cell.z & 255, cell.y), 0).r <= 0.5;
+}
+
+float clear(vec3 from, vec3 to) {
+    vec3 start = Camera + from;
+    vec3 delta = to - from;
+    ivec3 cell = ivec3(floor(start));
+    ivec3 last = ivec3(floor(Camera + to));
+    ivec3 stride = ivec3(sign(delta));
+    vec3 span = 1.0 / max(abs(delta), vec3(1e-6));
+    vec3 next = mix(start - floor(start), floor(start) + 1.0 - start, greaterThan(delta, vec3(0.0))) * span;
+    for (int i = 0; i < BEAM_MARCH; i++) {
+        if (cell == last) return 1.0;
+        if (next.x < next.y && next.x < next.z) {
+            cell.x += stride.x;
+            next.x += span.x;
+        } else if (next.y < next.z) {
+            cell.y += stride.y;
+            next.y += span.y;
+        } else {
+            cell.z += stride.z;
+            next.z += span.z;
+        }
+        if (cell != last && solid(cell)) return 0.0;
+    }
+    return 1.0;
+}
+
+float beamHaze(vec3 direction, float span) {
+    float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float range = BeamReach.y;
+    float total = 0.0;
+    for (int i = 0; i < BEAMS; i++) {
+        if (i >= BeamCount) break;
+        vec4 source = Beams[i * 2];
+        vec4 aim = Beams[i * 2 + 1];
+        float t0 = dot(source.xyz, direction);
+        float h2 = dot(source.xyz, source.xyz) - t0 * t0;
+        if (h2 >= range * range) continue;
+        float chord = sqrt(range * range - h2);
+        float from = max(t0 - chord, 0.0);
+        float to = min(t0 + chord, span);
+        if (to <= from) continue;
+        float hop = (to - from) / float(BEAM_STEPS);
+        float sum = 0.0;
+        for (int s = 0; s < BEAM_STEPS; s++) {
+            vec3 point = direction * (from + (float(s) + jitter) * hop);
+            vec3 ray = point - source.xyz;
+            float d2 = dot(ray, ray);
+            if (d2 < 1e-4) continue;
+            vec3 travel = ray * inversesqrt(d2);
+            float cone = smoothstep(BeamCone.y, BeamCone.x, dot(travel, aim.xyz));
+            if (cone <= 0.0) continue;
+            float g = -dot(travel, direction);
+            float phase = (1.0 - BEAM_FORWARD * BEAM_FORWARD) / pow(1.0 + BEAM_FORWARD * BEAM_FORWARD - 2.0 * BEAM_FORWARD * g, 1.5);
+            float amount = cone * cone * phase / (1.0 + d2 / (BeamCone.z * BeamCone.z)) * (1.0 - smoothstep(BeamReach.x, range, sqrt(d2)));
+            if (amount > BEAM_FAINT) amount *= clear(source.xyz, point);
+            sum += amount;
+        }
+        total += source.w * aim.w * sum * hop;
+    }
+    return total * BEAM_HAZE;
+}
+
+float occluded(vec3 from, vec3 light, float size, int mask) {
+    if (mask == 0) return 1.0;
+    float lit = 1.0;
+    for (int i = 0; i < CAPSULES; i++) {
+        if ((mask & (1 << i)) == 0) continue;
+        vec4 bottom = Capsules[i * 2];
+        lit *= capsuleShadow(from, light, size, bottom.xyz, Capsules[i * 2 + 1].xyz, bottom.w);
+    }
+    return lit;
+}
+
+float shadow(vec3 from, vec3 face, bool panel) {
+    if (!panel) return visible(from, face);
+    float turn = (int(gl_FragCoord.x + gl_FragCoord.y) & 1) == 0 ? PANEL_HALF : -PANEL_HALF;
+    vec3 offset = vec3(PANEL_HALF, 0.0, turn);
+    return 0.5 * (visible(from, face + offset) + visible(from, face - offset));
 }
 
 vec3 tangent(vec3 centre, vec3 before, vec3 after) {
@@ -119,6 +241,20 @@ void main() {
     }
     vec3 start = point + normal * 0.1;
 
+    int occluders = 0;
+    float hug = 0.0;
+    if (surface) {
+        for (int i = 0; i < CAPSULES; i++) {
+            if (i >= CapsuleCount) break;
+            vec4 bottom = Capsules[i * 2];
+            vec3 top = Capsules[i * 2 + 1].xyz;
+            float gap = capsuleGap(point, bottom.xyz, top);
+            if (gap >= CAPSULE_REACH) continue;
+            hug += capsuleOcclusion(point, normal, bottom.xyz, top, bottom.w);
+            if (gap > bottom.w + CAPSULE_SKIN) occluders |= 1 << i;
+        }
+    }
+
     float direct = 0.0;
     float full = 0.5 / max(Gain, 1e-4) + Shade;
     float glow = 0.0;
@@ -151,7 +287,7 @@ void main() {
                 if (receive > 0.0 && emit > 0.0) {
                     float fade = 1.0 - smoothstep(RANGE * 0.5, RANGE, sqrt(d2));
                     float amount = strength * sqrt(emit) * receive * fade / (d2 + SPREAD * SPREAD);
-                    if (amount > FAINT && direct < full) direct += amount * visible(start, face);
+                    if (amount > FAINT && direct < full) direct += amount * shadow(start, face, panel) * occluded(start, face, panel ? PANEL_SIZE : BULB_SIZE, occluders);
                 }
             }
         }
@@ -180,7 +316,9 @@ void main() {
         }
     }
 
+    glow += beamHaze(direction, span);
     float fog = surface ? smoothstep(FogStart, FogEnd, distance) : 1.0;
     float factor = emission > 0.0 ? 1.0 : clamp(1.0 + Gain * (direct - Shade * smoothstep(0.0, 0.02, direct)), 0.75, 1.5);
+    if (surface && emission <= 0.0) factor *= occlusion(point, normal) * (1.0 - min(hug, CAPSULE_HUG));
     fragColor = vec4(mix(factor, 1.0, fog), glow, emission * (1.0 - fog), 1.0);
 }
