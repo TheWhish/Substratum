@@ -4,7 +4,6 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.network.chat.Component
 import net.minecraft.world.entity.player.Player
-import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.client.menu.Loading
 import xyz.thewhish.substratum.client.menu.Menus
 import xyz.thewhish.substratum.level.SubstratumLevels
@@ -13,8 +12,7 @@ import xyz.thewhish.substratum.network.FeedSync
 object Feed {
     private const val MARGIN = 12
     private const val SIGNAL_SCALE = 3f
-    private val FONT = Substratum.id("caption")
-    private val NO_SIGNAL: Component = Component.translatable("hud.substratum.no_signal").withStyle { it.withFont(FONT) }
+    private val NO_SIGNAL: Component = Component.translatable("hud.substratum.no_signal")
 
     private var silent = false
 
@@ -42,7 +40,7 @@ object Feed {
         val channels = level.players().filter { !it.isSpectator }.sortedBy { it.uuid }
         val channel = channels.indexOfFirst { it.uuid == camera.uuid }
         if (channel < 0) return
-        val label = Component.translatable("hud.substratum.channel", "%02d".format(channel + 1)).withStyle { it.withFont(FONT) }
+        val label = Lettering.text(Component.translatable("hud.substratum.channel", "%02d".format(channel + 1)))
         graphics.drawString(minecraft.font, label, MARGIN, MARGIN, Menus.DIM, false)
     }
 
@@ -58,7 +56,8 @@ object Feed {
         pose.translate(graphics.guiWidth() / 2f, graphics.guiHeight() / 2f, 0f)
         pose.scale(SIGNAL_SCALE, SIGNAL_SCALE, 1f)
         val font = minecraft.font
-        graphics.drawString(font, NO_SIGNAL, -font.width(NO_SIGNAL) / 2, -font.lineHeight / 2, Menus.DIM, false)
+        val text = Lettering.text(NO_SIGNAL, SIGNAL_SCALE)
+        graphics.drawString(font, text, -font.width(text) / 2, -font.lineHeight / 2, Menus.DIM, false)
         pose.popPose()
     }
 }

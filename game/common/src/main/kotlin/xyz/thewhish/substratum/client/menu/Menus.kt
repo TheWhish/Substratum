@@ -54,7 +54,6 @@ object Menus {
         ClientGuiEvent.RENDER_POST.register { screen: Screen?, graphics, _, _, _ ->
             if (screen != null) Loading.renderScreen(graphics, screen)
         }
-        ClientGuiEvent.RENDER_HUD.register { graphics, _ -> Loading.renderHud(graphics) }
     }
 
     private fun lockBrightness(screen: VideoSettingsScreen) {

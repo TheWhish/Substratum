@@ -47,5 +47,15 @@
     "sounds": [
       { "name": "substratum:menu/press", "volume": 0.5 }
     ]
+  },
+  "item.pickup.bottle": {
+    "sounds": [
+      { "name": "substratum:item/pickup_bottle", "volume": 0.32, "attenuation_distance": 8 }
+    ]
+  },
+  "item.pickup.flashlight": {
+    "sounds": [
+      { "name": "substratum:item/pickup_flashlight", "volume": 0.32, "attenuation_distance": 8 }
+    ]
   }
 }

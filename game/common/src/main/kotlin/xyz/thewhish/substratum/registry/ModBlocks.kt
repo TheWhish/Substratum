@@ -6,7 +6,6 @@ import net.minecraft.core.BlockPos
 import net.minecraft.core.registries.Registries
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
-import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
 import net.minecraft.util.RandomSource
 import net.minecraft.util.StringRepresentable
@@ -279,6 +278,16 @@ object ModBlocks {
         }
     }
 
+    private fun pickUp(level: Level, pos: BlockPos, player: Player, item: Item): InteractionResult {
+        if (player.inventory.freeSlot < 0) return InteractionResult.FAIL
+        if (level.isClientSide) return InteractionResult.SUCCESS
+        level.removeBlock(pos, false)
+        BackroomsGuard.resyncRemoteWatchersAfterCrossPortalEdit(level, pos)
+        player.inventory.add(ItemStack(item))
+        ModSounds.playPickup(level, pos, item)
+        return InteractionResult.CONSUME
+    }
+
     private class AlmondWaterBlock(properties: Properties) : Block(properties) {
         override fun getShape(state: BlockState, level: BlockGetter, pos: BlockPos, context: CollisionContext): VoxelShape {
             val offset = state.getOffset(level, pos)
@@ -288,15 +297,8 @@ object ModBlocks {
         override fun getCloneItemStack(level: LevelReader, pos: BlockPos, state: BlockState): ItemStack =
             ItemStack(ModItems.ALMOND_WATER.get())
 
-        override fun useWithoutItem(state: BlockState, level: Level, pos: BlockPos, player: Player, hit: BlockHitResult): InteractionResult {
-            if (level.isClientSide) return InteractionResult.SUCCESS
-            level.removeBlock(pos, false)
-            BackroomsGuard.resyncRemoteWatchersAfterCrossPortalEdit(level, pos)
-            player.inventory.placeItemBackInInventory(ItemStack(ModItems.ALMOND_WATER.get()))
-            val pitch = ((level.random.nextFloat() - level.random.nextFloat()) * 0.7f + 1f) * 2f
-            level.playSound(null, pos, SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f, pitch)
-            return InteractionResult.CONSUME
-        }
+        override fun useWithoutItem(state: BlockState, level: Level, pos: BlockPos, player: Player, hit: BlockHitResult): InteractionResult =
+            pickUp(level, pos, player, ModItems.ALMOND_WATER.get())
     }
 
     private class FlashlightBlock(properties: Properties) : Block(properties) {
@@ -308,15 +310,8 @@ object ModBlocks {
         override fun getCloneItemStack(level: LevelReader, pos: BlockPos, state: BlockState): ItemStack =
             ItemStack(ModItems.FLASHLIGHT.get())
 
-        override fun useWithoutItem(state: BlockState, level: Level, pos: BlockPos, player: Player, hit: BlockHitResult): InteractionResult {
-            if (level.isClientSide) return InteractionResult.SUCCESS
-            level.removeBlock(pos, false)
-            BackroomsGuard.resyncRemoteWatchersAfterCrossPortalEdit(level, pos)
-            player.inventory.placeItemBackInInventory(ItemStack(ModItems.FLASHLIGHT.get()))
-            val pitch = ((level.random.nextFloat() - level.random.nextFloat()) * 0.7f + 1f) * 2f
-            level.playSound(null, pos, SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.2f, pitch)
-            return InteractionResult.CONSUME
-        }
+        override fun useWithoutItem(state: BlockState, level: Level, pos: BlockPos, player: Player, hit: BlockHitResult): InteractionResult =
+            pickUp(level, pos, player, ModItems.FLASHLIGHT.get())
     }
 
     private class PitVoidBlock(properties: Properties) : Block(properties) {
@@ -349,7 +344,7 @@ object ModBlocks {
 
     private fun register(id: String, block: () -> Block): RegistrySupplier<Block> {
         val supplier = BLOCKS.register(id, block)
-        BLOCK_ITEMS.register(id) { BlockItem(supplier.get(), Item.Properties()) }
+        BLOCK_ITEMS.register(id) { BlockItem(supplier.get(), Item.Properties().stacksTo(1)) }
         return supplier
     }
 

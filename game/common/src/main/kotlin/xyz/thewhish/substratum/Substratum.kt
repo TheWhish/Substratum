@@ -9,6 +9,7 @@ import xyz.thewhish.substratum.config.ServerConfig
 import xyz.thewhish.substratum.gaze.Watch
 import xyz.thewhish.substratum.level.BackroomsGuard
 import xyz.thewhish.substratum.level.Epoch
+import xyz.thewhish.substratum.level.Hands
 import xyz.thewhish.substratum.level.LampBursts
 import xyz.thewhish.substratum.level.LevelRules
 import xyz.thewhish.substratum.level.PitExitGuard
@@ -48,6 +49,7 @@ object Substratum {
         SanityTracker.register()
         LampBursts.register()
         LevelRules.register()
+        Hands.register()
         PitExitGuard.register()
         BackroomsGuard.register()
         ViewportSync.register()

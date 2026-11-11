@@ -1,6 +1,8 @@
 package xyz.thewhish.substratum.client
 
+import com.mojang.blaze3d.vertex.PoseStack
 import net.minecraft.client.model.PlayerModel
+import net.minecraft.client.model.geom.ModelPart
 import net.minecraft.client.model.geom.PartPose
 import net.minecraft.client.model.geom.builders.CubeDeformation
 import net.minecraft.client.model.geom.builders.CubeListBuilder
@@ -8,6 +10,7 @@ import net.minecraft.client.model.geom.builders.LayerDefinition
 import net.minecraft.client.model.geom.builders.MeshDefinition
 import net.minecraft.client.model.geom.builders.PartDefinition
 import net.minecraft.util.Mth
+import net.minecraft.world.entity.HumanoidArm
 import net.minecraft.world.entity.LivingEntity
 import java.util.WeakHashMap
 
@@ -19,7 +22,9 @@ object Suit {
     const val FOREARM = "forearm"
     const val SHIN = "shin"
     private val FABRIC = CubeDeformation(0.25f)
-    private val JOINT = CubeDeformation(0.22f)
+    private const val JOINT_GROWTH = 0.22f
+    private val JOINT = CubeDeformation(JOINT_GROWTH)
+    private const val SLEEVE_SEGMENTS = 2
     private val GLOVE = CubeDeformation(0.4f)
     private val CUFF = CubeDeformation(0.6f, 0.2f, 0.6f)
     private val BOOT = CubeDeformation(0.4f, 0.3f, 0.4f)
@@ -84,6 +89,15 @@ object Suit {
             setRotation(motion.lean.position, motion.twist.position, Mth.sin(step) * PACK_ROLL * limbSwingAmount)
         }
         model.body.getChild(LAMP).setRotation(motion.swing.position + Mth.cos(step * 2) * LAMP_STEP * limbSwingAmount, 0f, motion.sway.position)
+        Drinking.pose(model, entity)
+    }
+
+    @JvmStatic
+    fun holdInGlove(model: PlayerModel<*>, arm: HumanoidArm, pose: PoseStack) {
+        val forearm = (if (arm == HumanoidArm.LEFT) model.leftArm else model.rightArm).getChild(FOREARM)
+        forearm.translateAndRotate(pose)
+        pose.translate(0f, -forearm.y / 16f, 0f)
+        Drinking.wrist(model, arm, pose)
     }
 
     private fun rest(model: PlayerModel<*>, figure: Figure) {
@@ -212,6 +226,16 @@ object Suit {
                 .texOffs(32, 16).addBox(inner, 1.5f, -2f, 4f, 1f, 4f, CUFF),
             PartPose.offset(0f, 4f, 0f),
         )
+    }
+
+    fun sleeve(left: Boolean): ModelPart {
+        val mesh = MeshDefinition()
+        val cubes = CubeListBuilder.create().mirror(left).texOffs(56, 5)
+        for (segment in 1..SLEEVE_SEGMENTS) {
+            cubes.addBox(if (left) -1f else -3f, -1f - segment * (7f + 2 * JOINT_GROWTH), -2f, 4f, 7f, 4f, JOINT)
+        }
+        mesh.root.addOrReplaceChild(FOREARM, cubes, PartPose.offset(0f, 4f, 0f))
+        return LayerDefinition.create(mesh, WIDTH, HEIGHT).bakeRoot().getChild(FOREARM)
     }
 
     private fun leg(root: PartDefinition, name: String, x: Float, left: Boolean) {

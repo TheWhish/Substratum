@@ -94,5 +94,5 @@ object LevelRules {
 
     private fun picksUp(player: Player, hand: InteractionHand, state: BlockState): Boolean =
         (state.`is`(ModBlocks.ALMOND_WATER.get()) || state.`is`(ModBlocks.FLASHLIGHT.get())) && hand == InteractionHand.MAIN_HAND && !player.isSpectator &&
-            !(player.isSecondaryUseActive && (!player.mainHandItem.isEmpty || !player.offhandItem.isEmpty))
+            !(player.isSecondaryUseActive && !player.mainHandItem.isEmpty)
 }

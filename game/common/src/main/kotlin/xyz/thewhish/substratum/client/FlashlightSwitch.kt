@@ -26,13 +26,8 @@ object FlashlightSwitch {
     private fun travel(stack: ItemStack, entity: LivingEntity?): Float {
         val on = FlashlightItem.isOn(stack)
         val rest = if (on) 1f else 0f
-        val hand = when {
-            entity == null -> return rest
-            entity.mainHandItem === stack -> 0
-            entity.offhandItem === stack -> 1
-            else -> return rest
-        }
-        val key = entity.id * 2 + hand
+        if (entity == null || entity.mainHandItem !== stack) return rest
+        val key = entity.id
         val motion = motions[key]
         if (motion == null || motion.on != on) motions[key] = Motion(on, if (motion == null) 0L else Util.getNanos())
         val t = ((Util.getNanos() - motions.getValue(key).since).toFloat() / CLICK_NANOS).coerceIn(0f, 1f)

@@ -13,8 +13,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Gui.class)
 abstract class HudMixin {
 
-    @Inject(method = {"renderPlayerHealth", "renderVehicleHealth"}, at = @At("HEAD"), cancellable = true)
-    private void substratum$noHealth(GuiGraphics graphics, CallbackInfo ci) {
+    @Inject(method = {"renderPlayerHealth", "renderVehicleHealth", "renderSelectedItemName"}, at = @At("HEAD"), cancellable = true)
+    private void substratum$noVanillaPanel(GuiGraphics graphics, CallbackInfo ci) {
         ci.cancel();
     }
 
@@ -29,7 +29,7 @@ abstract class HudMixin {
     }
 
     @Inject(
-            method = {"renderExperienceLevel", "renderEffects", "renderTabList", "renderScoreboardSidebar"},
+            method = {"renderExperienceLevel", "renderEffects", "renderTabList", "renderScoreboardSidebar", "renderItemHotbar", "renderCrosshair"},
             at = @At("HEAD"),
             cancellable = true
     )

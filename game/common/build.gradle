@@ -59,6 +59,21 @@ tasks.register("shaderCheck", JavaExec) {
     }
 }
 
+tasks.register("drinkFit", JavaExec) {
+    group = "verification"
+    description = "Fits the drinking arm poses so the bottle neck meets the respirator."
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "xyz.thewhish.substratum.client.DrinkFitKt"
+}
+
+tasks.register("drinkPreview", JavaExec) {
+    group = "verification"
+    description = "Draws the drinking gesture frame by frame from three views."
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "xyz.thewhish.substratum.client.DrinkPreviewKt"
+    args layout.buildDirectory.file("checks/drink.png").get().asFile.absolutePath
+}
+
 tasks.named("check") { dependsOn checks.keySet() + "suitCheck" }
 
 tasks.named("test") { failOnNoDiscoveredTests = false }

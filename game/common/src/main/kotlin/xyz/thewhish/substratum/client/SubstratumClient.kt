@@ -17,6 +17,7 @@ import net.minecraft.world.level.Level
 import qouteall.imm_ptl.core.ClientWorldLoader
 import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.client.menu.Backdrop
+import xyz.thewhish.substratum.client.menu.Loading
 import xyz.thewhish.substratum.client.menu.Menus
 import xyz.thewhish.substratum.level.SubstratumLevels
 import xyz.thewhish.substratum.network.ViewportSync
@@ -40,6 +41,7 @@ object SubstratumClient {
         ClientTickEvent.CLIENT_LEVEL_POST.register { level ->
             reportViewportIfChanged()
             turnSmilers(level)
+            Drinking.tick(level)
         }
         ClientTickEvent.CLIENT_POST.register(::preparePortalWorlds)
         ClientTickEvent.CLIENT_POST.register(LampHum::tick)
@@ -55,8 +57,13 @@ object SubstratumClient {
         ClientGuiEvent.RENDER_HUD.register(Vhs::renderHud)
         ClientGuiEvent.RENDER_HUD.register { graphics, _ -> Feed.renderHud(graphics) }
         ClientTickEvent.CLIENT_PRE.register(Feed::tick)
+        ClientTickEvent.CLIENT_PRE.register(Hotbar::guard)
+        ClientTickEvent.CLIENT_POST.register(Hotbar::tick)
+        ClientGuiEvent.RENDER_HUD.register(Hotbar::render)
+        ClientGuiEvent.RENDER_HUD.register(Reticle::render)
         ClientTickEvent.CLIENT_POST.register(ProbeView::tick)
         ClientGuiEvent.RENDER_HUD.register { graphics, _ -> ProbeView.renderHud(graphics) }
+        ClientGuiEvent.RENDER_HUD.register { graphics, _ -> Loading.renderHud(graphics) }
         ClientConfig.load()
         ReloadListenerRegistry.register(PackType.CLIENT_RESOURCES, ResourceManagerReloadListener {
             ClientConfig.load()
