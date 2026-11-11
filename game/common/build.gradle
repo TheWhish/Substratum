@@ -25,6 +25,7 @@ def checks = [
         replayCheck  : "network.ReplayPositionCheckKt",
         presenceCheck: "client.PresenceCheckKt",
         spawnCheck   : "level.SpawnPlanCheckKt",
+        runCheck     : "level.RunStateCheckKt",
 ]
 
 checks.each { name, main ->

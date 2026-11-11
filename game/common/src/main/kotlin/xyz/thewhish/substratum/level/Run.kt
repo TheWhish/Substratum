@@ -31,15 +31,10 @@ object Run {
 
     private class Entry(val items: ListTag, val sanity: Int)
 
-    private var number = 0
-    private val saved = HashMap<UUID, Entry>()
-    private val departed = HashMap<UUID, Entry>()
-    private val lost = HashSet<UUID>()
-    private var begun = false
+    private val state = RunState<Entry>()
     private var silenceAt = -1
-    private var area = 0
 
-    val level: Int get() = number
+    val level: Int get() = state.level
 
     fun register() {
         LifecycleEvent.SERVER_STARTED.register(::load)
@@ -48,10 +43,10 @@ object Run {
         TickEvent.SERVER_POST.register(::tick)
     }
 
-    fun alive(players: List<ServerPlayer>): List<ServerPlayer> = players.filter { it.uuid !in lost }.sortedBy { it.uuid }
+    fun alive(players: List<ServerPlayer>): List<ServerPlayer> = players.filter { !state.isLost(it.uuid) }.sortedBy { it.uuid }
 
     fun turn(player: ServerPlayer, forward: Boolean) {
-        if (player.uuid !in lost) return
+        if (!state.isLost(player.uuid)) return
         val alive = alive(player.server.playerList.players)
         if (alive.isEmpty()) return
         val current = alive.indexOfFirst { it === player.camera }
@@ -61,56 +56,47 @@ object Run {
 
     fun begin(server: MinecraftServer) {
         val players = server.playerList.players
-        if (begun || players.isEmpty() || Epoch.frozen) return
-        begun = true
-        players.forEach { apply(it, saved[it.uuid]) }
+        if (players.isEmpty() || Epoch.frozen || !state.begin()) return
+        players.forEach { apply(it, state.entry(it.uuid)) }
         start(server, players)
     }
 
     fun lose(player: ServerPlayer) {
-        if (!begun || !lost.add(player.uuid)) return
+        if (!state.lose(player.uuid)) return
         Remains.leave(player)
         SanityTracker.set(player, 0)
         spectate(player)
     }
 
     fun advance(server: MinecraftServer) {
-        if (!begun) return
-        number++
+        if (!state.begun) return
         val players = server.playerList.players
-        saved.putAll(departed)
-        departed.clear()
-        players.forEach { saved[it.uuid] = snapshot(it) }
+        state.advance(players.associate { it.uuid to snapshot(it) })
         write(server)
-        move()
         start(server, players)
     }
 
     private fun load(server: MinecraftServer) {
-        begun = false
-        number = 0
-        saved.clear()
-        departed.clear()
-        lost.clear()
-        area = 0
+        silenceAt = -1
         val file = file(server)
-        if (!Files.exists(file)) return
+        if (!Files.exists(file)) return state.load(0, emptyMap())
         val root = try {
             NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap())
         } catch (e: IOException) {
             throw IllegalStateException("could not read the run at $file", e)
         }
-        number = root.getInt("level")
+        val entries = HashMap<UUID, Entry>()
         for (tag in root.getList("players", Tag.TAG_COMPOUND.toInt())) {
             val player = tag as CompoundTag
             val id = player.get("uuid") ?: continue
-            saved[NbtUtils.loadUUID(id)] = Entry(player.getList("items", Tag.TAG_COMPOUND.toInt()), player.getInt("sanity"))
+            entries[NbtUtils.loadUUID(id)] = Entry(player.getList("items", Tag.TAG_COMPOUND.toInt()), player.getInt("sanity"))
         }
+        state.load(root.getInt("level"), entries)
     }
 
     private fun write(server: MinecraftServer) {
         val players = ListTag()
-        for ((uuid, entry) in saved) {
+        for ((uuid, entry) in state.save) {
             players.add(CompoundTag().apply {
                 put("uuid", NbtUtils.createUUID(uuid))
                 put("items", entry.items)
@@ -118,21 +104,20 @@ object Run {
             })
         }
         val root = CompoundTag().apply {
-            putInt("level", number)
+            putInt("level", state.level)
             put("players", players)
         }
         val file = file(server)
         val temporary = file.resolveSibling("$FILE.tmp")
         NbtIo.writeCompressed(root, temporary)
         Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-        Substratum.LOGGER.info("Run saved at level {} for {} players", number, saved.size)
+        Substratum.LOGGER.info("Run saved at level {} for {} players", state.level, state.save.size)
     }
 
     private fun joined(player: ServerPlayer) {
         when {
-            begun -> {
-                departed.remove(player.uuid)
-                lost.add(player.uuid)
+            state.begun -> {
+                apply(player, state.join(player.uuid))
                 spectate(player)
                 if (silenceAt >= 0) FeedSync.signal(player, live = false)
             }
@@ -142,20 +127,17 @@ object Run {
     }
 
     private fun left(player: ServerPlayer) {
-        if (!begun) return
-        departed[player.uuid] = snapshot(player)
-        lost.remove(player.uuid)
+        state.leave(player.uuid, snapshot(player))
     }
 
     private fun tick(server: MinecraftServer) {
-        if (!begun) return
         val players = server.playerList.players
-        if (players.isEmpty()) return
-        val alive = alive(players)
-        if (alive.isEmpty()) return fade(server, players)
+        if (!state.begun || players.isEmpty()) return
+        if (state.fallen(players.map { it.uuid })) return fade(server, players)
         silenceAt = -1
+        val alive = alive(players)
         for (player in players) {
-            if (player.uuid !in lost) continue
+            if (!state.isLost(player.uuid)) continue
             if (!player.isSpectator) player.setGameMode(GameType.SPECTATOR)
             val camera = player.camera
             if (alive.none { it === camera }) player.setCamera(alive.first())
@@ -170,28 +152,18 @@ object Run {
         }
         if (now - silenceAt < SILENCE) return
         silenceAt = -1
-        wipe(server)
+        state.wipe()
+        players.forEach { apply(it, null) }
+        start(server, players)
         players.forEach { FeedSync.signal(it, live = true) }
     }
 
-    private fun wipe(server: MinecraftServer) {
-        val players = server.playerList.players
-        players.forEach { apply(it, null) }
-        move()
-        start(server, players)
-    }
-
     private fun start(server: MinecraftServer, players: List<ServerPlayer>) {
-        lost.clear()
         for (player in players) {
             player.setCamera(player)
             player.setGameMode(server.defaultGameType)
         }
-        Arrival.spread(server, players, MazeLayout.CENTRE + area * SHIFT, MazeLayout.CENTRE)
-    }
-
-    private fun move() {
-        area++
+        Arrival.spread(server, players, MazeLayout.CENTRE + state.area * SHIFT, MazeLayout.CENTRE)
     }
 
     private fun spectate(player: ServerPlayer) {

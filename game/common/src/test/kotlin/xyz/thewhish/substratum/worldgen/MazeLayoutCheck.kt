@@ -17,7 +17,7 @@ fun main(args: Array<String>) {
         checkShape(layout, seed, tally)
         countCorridorDetail(layout, tally)
         countAnomalies(layout, tally)
-        checkAlmondWater(layout, seed, tally)
+        checkStashes(layout, seed, tally)
         surveyVariety(layout, tally)
     }
     check(tally.pits > 0) { "no floor holes anywhere — room variety is gone" }
@@ -75,9 +75,13 @@ fun main(args: Array<String>) {
     for ((kind, count) in listOf("flickering" to tally.darkFlickering, "dim" to tally.darkDim, "lit" to tally.darkLamps - tally.darkFlickering - tally.darkDim)) {
         check(count.toDouble() / tally.darkLamps in 0.25..0.42) { "dark-zone lamps must split into thirds, $kind is $count of ${tally.darkLamps}" }
     }
+    val perWindow = tally.stashes.map { it.toDouble() / SEEDS }
+    check(perWindow.last() < tally.spots.toDouble() / SEEDS * 0.75) { "a full party leaves almost no empty stash spots" }
+    val flashlightShare = tally.flashlights.toDouble() / (tally.almondLight + tally.almondDark)
+    check(flashlightShare in 0.18..0.32) { "flashlights are ${flashlightShare.pct()}% of stashes" }
     println(
-        "  almond water per window: ${"%.1f".format((tally.almondLight + tally.almondDark).toDouble() / SEEDS)} " +
-            "in ${tally.hideouts / SEEDS} hideouts, one per " +
+        "  stashes per window for 1..${MazeLayout.PARTY_MAX} players: ${perWindow.joinToString(" / ") { "%.1f".format(it) }} " +
+            "in ${tally.spots / SEEDS} spots, ${flashlightShare.pct()}% flashlights; solo: one per " +
             "${tally.lightCells / maxOf(1, tally.almondLight)} lit cells, one per ${tally.darkCells / maxOf(1, tally.almondDark)} dark cells."
     )
     val surveyed = tally.surveyCells.toDouble()
@@ -145,7 +149,9 @@ private class Tally {
     var darkFlickering = 0
     val lightShares = IntArray(4)
     var darkDim = 0
-    var hideouts = 0
+    var spots = 0
+    val stashes = IntArray(MazeLayout.PARTY_MAX)
+    var flashlights = 0
     var almondLight = 0
     var almondDark = 0
     var lightCells = 0
@@ -530,31 +536,52 @@ private fun countAnomalies(layout: MazeLayout, tally: Tally) {
     }
 }
 
-private fun checkAlmondWater(layout: MazeLayout, seed: Long, tally: Tally) {
+private fun checkStashes(layout: MazeLayout, seed: Long, tally: Tally) {
     val origin = -WINDOW / 2
-    val bottles = HashMap<Long, Int>()
+    val stashes = HashSet<Long>()
     for (x in origin until origin + WINDOW) {
         for (z in origin until origin + WINDOW) {
             val column = layout.columnAt(x, z)
             val dark = column and MazeLayout.DARK_ZONE != 0
-            val cellX = Math.floorDiv(x, MazeLayout.CELL)
-            val cellZ = Math.floorDiv(z, MazeLayout.CELL)
             if (Math.floorMod(x, MazeLayout.CELL) == MazeLayout.CENTRE && Math.floorMod(z, MazeLayout.CELL) == MazeLayout.CENTRE) {
                 if (dark) tally.darkCells++ else tally.lightCells++
-                if (layout.isHideout(cellX, cellZ)) tally.hideouts++
             }
-            if (!layout.almondWaterAt(x, z)) continue
-            val where = "seed $seed: almond water at ($x, $z)"
+            if (!layout.stashSpot(x, z)) continue
+            tally.spots++
+            val where = "seed $seed: stash spot at ($x, $z)"
             check(column and (MazeLayout.SOLID or MazeLayout.PIT_ROOM) == 0) { "$where stands in a wall or a hole hall" }
-            check(layout.isHideout(cellX, cellZ)) { "$where is in a cell that is not a hideout" }
-            val walls = listOf(x - 1 to z, x + 1 to z, x to z - 1, x to z + 1).count { (nx, nz) -> solid(layout, nx, nz) }
-            check(walls <= 2) { "$where is boxed in on three sides" }
-            val cell = (cellX.toLong() shl 32) or (cellZ.toLong() and 0xFFFF_FFFFL)
-            check(bottles.merge(cell, 1, Int::plus) == 1) { "$where shares its cell with another bottle" }
-            if (dark) tally.almondDark++ else tally.almondLight++
+            val niche = Math.floorMod(x, MazeLayout.CELL) < MazeLayout.WALL || Math.floorMod(z, MazeLayout.CELL) < MazeLayout.WALL
+            if (niche) {
+                val walls = listOf(x - 1 to z, x + 1 to z, x to z - 1, x to z + 1).count { (nx, nz) -> solid(layout, nx, nz) }
+                check(walls in 1..2) { "$where has $walls walls around it, a niche stash must lean on its back wall" }
+            } else {
+                val walls = (-1..1).sumOf { dx -> (-1..1).count { dz -> solid(layout, x + dx, z + dz) } }
+                check(walls == 0) { "$where touches $walls wall blocks, a dead-end stash keeps one block of room on every side" }
+            }
+            for (players in 1..MazeLayout.PARTY_MAX) {
+                val stashed = layout.stashAt(x, z, dark, MazeLayout.plenty(players))
+                check(!stashed || layout.stashAt(x, z, dark, MazeLayout.plenty(players + 1))) {
+                    "$where loses its stash when a player joins"
+                }
+                if (!stashed) continue
+                tally.stashes[players - 1]++
+                if (players > 1) continue
+                if (dark) tally.almondDark++ else tally.almondLight++
+                if (layout.flashlightAt(x, z)) tally.flashlights++
+            }
+            if (layout.stashAt(x, z, dark, MazeLayout.plenty(MazeLayout.PARTY_MAX))) stashes += key(x, z)
+        }
+    }
+    for (stash in stashes) {
+        val x = (stash shr 32).toInt()
+        val z = stash.toInt()
+        for (dx in -2..2) for (dz in -2..2) {
+            check(dx == 0 && dz == 0 || key(x + dx, z + dz) !in stashes) { "seed $seed: stashes at ($x, $z) and ${x + dx}, ${z + dz} crowd each other" }
         }
     }
 }
+
+private fun key(x: Int, z: Int): Long = (x.toLong() shl 32) or (z.toLong() and 0xFFFF_FFFFL)
 
 private fun checkWallColumn(layout: MazeLayout, x: Int, z: Int, tally: Tally) {
     val top = MazeLayout.topOf(layout.columnAt(x, z))

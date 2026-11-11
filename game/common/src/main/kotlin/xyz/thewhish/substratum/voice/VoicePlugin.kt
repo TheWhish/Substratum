@@ -16,6 +16,7 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.SocketAddress
+import java.util.concurrent.atomic.AtomicReference
 
 object VoicePlugin : VoicechatPlugin {
 
@@ -41,6 +42,7 @@ private class HostSocket : VoicechatSocket {
         check(socket == null) { "The voice socket is already open" }
         val opened = DatagramSocket(port, InetAddress.getLoopbackAddress())
         socket = opened
+        current.set(this)
         Link.voice(opened.localPort)
     }
 
@@ -52,10 +54,14 @@ private class HostSocket : VoicechatSocket {
 
     override fun close() {
         socket?.close()
-        Link.voice(null)
+        if (current.compareAndSet(this, null)) Link.voice(null)
     }
 
     override fun isClosed() = socket?.isClosed ?: true
+
+    private companion object {
+        val current = AtomicReference<HostSocket?>()
+    }
 }
 
 private class GuestSocket : ClientVoicechatSocket {

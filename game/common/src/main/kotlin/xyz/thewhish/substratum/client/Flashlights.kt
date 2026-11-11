@@ -21,15 +21,15 @@ import kotlin.math.sqrt
 object Flashlights {
 
     const val MAX = 4
-    const val NEAR = 6f
-    const val RANGE = 35f
-    const val FADE_FROM = 20f
-    const val GAIN = 1.4f
-    val COS_INNER = cos(Math.toRadians(10.0)).toFloat()
-    val COS_OUTER = cos(Math.toRadians(29.0)).toFloat()
+    const val NEAR = 9f
+    const val RANGE = 52f
+    const val FADE_FROM = 32f
+    const val GAIN = 1.6f
+    val COS_INNER = cos(Math.toRadians(11.0)).toFloat()
+    val COS_OUTER = cos(Math.toRadians(32.0)).toFloat()
     val COLOR = floatArrayOf(1.0f, 0.8f, 0.58f)
 
-    private const val REACH = 48.0
+    private const val REACH = RANGE + 16.0
     private const val LENS_FORWARD = 0.8
     private const val LENS_SIDE = 0.34
     private const val LENS_DROP = 0.24
@@ -43,6 +43,8 @@ object Flashlights {
     private const val DAZZLE_MAX = 0.22f
     private const val DAZZLE_GAIN = 1.5f
     private const val DAZZLE_SECONDS = 0.35f
+    private const val FACE_FROM = 0.2f
+    private const val FACE_FULL = 0.8f
 
     class Beam {
         var x = 0.0
@@ -84,14 +86,17 @@ object Flashlights {
             .sortedBy { if (it === local) -1.0 else it.distanceToSqr(camera) }
             .take(MAX)
             .forEach { aim(beams[count++], it, it === local && minecraft.options.cameraType.isFirstPerson, minecraft, partialTick, seconds) }
-        squint(level, local, camera, seconds)
+        squint(level, local, partialTick, seconds)
     }
 
-    private fun squint(level: Level, viewer: Player, eye: Vec3, seconds: Float) {
+    private fun squint(level: Level, viewer: Player, partialTick: Float, seconds: Float) {
+        val eye = viewer.getEyePosition(partialTick)
+        val look = viewer.getViewVector(partialTick)
         var glare = 0f
         for (i in 0 until count) {
             val beam = beams[i]
-            val amount = reach(beam, eye)
+            if (beam.owner == viewer.id) continue
+            val amount = reach(beam, eye) * facing(beam, eye, look)
             if (amount >= FAINT && !blocked(level, viewer, beam, eye)) glare += amount
         }
         val target = DAZZLE_MAX * (1f - exp(-glare * DAZZLE_GAIN))
@@ -166,6 +171,15 @@ object Flashlights {
         val d = sqrt(d2)
         val cone = smoothstep(COS_OUTER, COS_INNER, beam.direction.dot(dx, dy, dz) / d)
         return beam.power * GAIN * cone * cone / (1f + d2 / (NEAR * NEAR)) * (1f - smoothstep(FADE_FROM, RANGE, d))
+    }
+
+    private fun facing(beam: Beam, eye: Vec3, look: Vec3): Float {
+        val dx = beam.x - eye.x
+        val dy = beam.y - eye.y
+        val dz = beam.z - eye.z
+        val distance = sqrt(dx * dx + dy * dy + dz * dz)
+        if (distance < 1e-3) return 0f
+        return smoothstep(FACE_FROM, FACE_FULL, ((dx * look.x + dy * look.y + dz * look.z) / distance).toFloat())
     }
 
     private fun blocked(level: Level, entity: Entity, beam: Beam, point: Vec3): Boolean =

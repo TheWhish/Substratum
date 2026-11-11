@@ -3,9 +3,9 @@ package xyz.thewhish.substratum.sanity
 enum class SanityPhase(val startTick: Int) {
     QUIET(0),
 
-    DISORIENTATION(5 * 60 * 20),
+    DISORIENTATION(SanityTracker.LIMIT * 2 / 5),
 
-    HUNT(10 * 60 * 20);
+    HUNT(SanityTracker.LIMIT * 4 / 5);
 
     companion object {
         private val DESCENDING = entries.sortedByDescending { it.startTick }

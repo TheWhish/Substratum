@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 object SanityTracker {
     const val SYNC_INTERVAL = 40
-    const val LIMIT = 15_000
+    const val LIMIT = 20_000
 
     private val elapsed = ConcurrentHashMap<UUID, Int>()
 

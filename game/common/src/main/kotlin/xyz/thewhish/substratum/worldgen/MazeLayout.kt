@@ -88,11 +88,17 @@ class MazeLayout(val seed: Long) {
         private const val DARK_DIM_RATE = 0x8000
 
         private const val SALT_ALMOND = 0x4E15
+        private const val SALT_STASH = 0x4E18
+        private const val SALT_NICHE = 0x4E19
+        private const val NICHE_KEEP = 0x9C00
         private const val SALT_FLASHLIGHT = 0x4E17
-        private const val FLASHLIGHT_SHARE = 0x3333
-        private const val ALMOND_RATE = 0x6000
-        private const val DARK_ALMOND_RATE = 0xD000
-        private const val HIDEOUT_DEPTH = 3
+        private const val FLASHLIGHT_SHARE = 0x4000
+        private const val STASH_RATE = 0x2000
+        private const val DARK_STASH_RATE = 0x4800
+        private const val PLENTY_PER_EXTRA_PLAYER = 0.75f
+        const val PARTY_MAX = 4
+
+        fun plenty(players: Int): Float = 1f + PLENTY_PER_EXTRA_PLAYER * (players.coerceIn(1, PARTY_MAX) - 1)
 
         private const val ANOMALY_PITCH = 4
 
@@ -396,10 +402,13 @@ class MazeLayout(val seed: Long) {
         sectorOf(cellX, cellZ).hDoor[localIndex(cellX, cellZ)].toInt()
 
     private fun vNiche(cellX: Int, cellZ: Int): Int =
-        sectorOf(cellX, cellZ).vNiche[localIndex(cellX, cellZ)].toInt()
+        kept(cellX * 2, cellZ, sectorOf(cellX, cellZ).vNiche[localIndex(cellX, cellZ)].toInt())
 
     private fun hNiche(cellX: Int, cellZ: Int): Int =
-        sectorOf(cellX, cellZ).hNiche[localIndex(cellX, cellZ)].toInt()
+        kept(cellX * 2 + 1, cellZ, sectorOf(cellX, cellZ).hNiche[localIndex(cellX, cellZ)].toInt())
+
+    private fun kept(a: Int, b: Int, niche: Int): Int =
+        if (niche != 0 && ((seedFor(seed, a, b, SALT_NICHE) ushr 17) and 0xFFFF) < NICHE_KEEP) niche else 0
 
     private fun cellPit(cellX: Int, cellZ: Int): Boolean =
         sectorOf(cellX, cellZ).pit[localIndex(cellX, cellZ)]
@@ -517,44 +526,37 @@ class MazeLayout(val seed: Long) {
     fun lampDims(x: Int, z: Int, dark: Boolean): Boolean =
         ((seedFor(seed, x, z, SALT_DIM) ushr 17) and 0xFFFF) < if (dark) DARK_DIM_RATE else DIM_RATE
 
-    fun almondWaterAt(x: Int, z: Int): Boolean {
-        val localX = Math.floorMod(x, CELL)
-        val localZ = Math.floorMod(z, CELL)
-        if (localX < WALL || localZ < WALL) return false
-        val cellX = Math.floorDiv(x, CELL)
-        val cellZ = Math.floorDiv(z, CELL)
-        val roll = seedFor(seed, cellX, cellZ, SALT_ALMOND)
-        val rate = if (sectorOf(cellX, cellZ).dark[localIndex(cellX, cellZ)]) DARK_ALMOND_RATE else ALMOND_RATE
-        if (((roll ushr 17) and 0xFFFF) >= rate) return false
-        val mouth = openSide(cellX, cellZ)
-        if (mouth < 0) return false
-        val pick = roll ushr 33
-        if (doorOn(cellX, cellZ, mouth) != 0) {
-            val open = CELL - WALL
-            return localX == WALL + (pick % open).toInt() && localZ == WALL + (pick / open % open).toInt() &&
-                !cellPit(cellX, cellZ)
-        }
-        val across = WALL + 1 + (pick % 3).toInt()
-        val depth = (pick / 3 % (CELL - WALL - 1)).toInt()
-        val placed = when (mouth) {
-            WEST -> localX == WALL + depth && localZ == across
-            EAST -> localX == CELL - 1 - depth && localZ == across
-            NORTH -> localZ == WALL + depth && localX == across
-            else -> localZ == CELL - 1 - depth && localX == across
-        }
-        return placed && isHideout(cellX, cellZ, mouth)
+    fun stashAt(x: Int, z: Int, dark: Boolean, plenty: Float): Boolean {
+        if (!stashSpot(x, z)) return false
+        val rate = (if (dark) DARK_STASH_RATE else STASH_RATE) * plenty
+        return ((seedFor(seed, x, z, SALT_STASH) ushr 17) and 0xFFFF) < rate
     }
 
     fun flashlightAt(x: Int, z: Int): Boolean =
-        ((seedFor(seed, Math.floorDiv(x, CELL), Math.floorDiv(z, CELL), SALT_FLASHLIGHT) ushr 17) and 0xFFFF) < FLASHLIGHT_SHARE
+        ((seedFor(seed, x, z, SALT_FLASHLIGHT) ushr 17) and 0xFFFF) < FLASHLIGHT_SHARE
 
-    internal fun isHideout(cellX: Int, cellZ: Int): Boolean {
-        val mouth = openSide(cellX, cellZ)
-        return mouth >= 0 && isHideout(cellX, cellZ, mouth)
+    internal fun stashSpot(x: Int, z: Int): Boolean {
+        val cellX = Math.floorDiv(x, CELL)
+        val cellZ = Math.floorDiv(z, CELL)
+        val localX = Math.floorMod(x, CELL)
+        val localZ = Math.floorMod(z, CELL)
+        return when {
+            localX >= WALL && localZ >= WALL -> deadEndSpot(cellX, cellZ, localX, localZ)
+            localZ == CENTRE && localX < WALL -> vWall(cellX, cellZ) && localX == nicheFace(vNiche(cellX, cellZ)) &&
+                passage(cellX - 1, cellZ) && passage(cellX, cellZ)
+            localX == CENTRE && localZ < WALL -> hWall(cellX, cellZ) && localZ == nicheFace(hNiche(cellX, cellZ)) &&
+                passage(cellX, cellZ - 1) && passage(cellX, cellZ)
+            else -> false
+        }
     }
 
-    private fun isHideout(cellX: Int, cellZ: Int, mouth: Int): Boolean =
-        !cellPit(cellX, cellZ) && (doorOn(cellX, cellZ, mouth) != 0 || branchDepth(cellX, cellZ, mouth) >= HIDEOUT_DEPTH)
+    private fun passage(cellX: Int, cellZ: Int): Boolean = openSide(cellX, cellZ) < 0 && !cellPit(cellX, cellZ)
+
+    private fun deadEndSpot(cellX: Int, cellZ: Int, localX: Int, localZ: Int): Boolean {
+        if (openSide(cellX, cellZ) < 0 || cellPit(cellX, cellZ)) return false
+        val pick = (seedFor(seed, cellX, cellZ, SALT_ALMOND) ushr 33).toInt()
+        return localX == WALL + 1 + pick % 3 && localZ == WALL + 1 + pick / 3 % 3
+    }
 
     private fun openSide(cellX: Int, cellZ: Int): Int {
         var side = -1
@@ -566,52 +568,11 @@ class MazeLayout(val seed: Long) {
         return side
     }
 
-    private fun branchDepth(cellX: Int, cellZ: Int, mouth: Int): Int {
-        var x = cellX
-        var z = cellZ
-        var dir = mouth
-        var depth = 1
-        while (depth < HIDEOUT_DEPTH) {
-            x += stepX(dir)
-            z += stepZ(dir)
-            val back = dir xor 1
-            var next = -1
-            for (side in WEST..SOUTH) {
-                if (side == back || !opens(x, z, side)) continue
-                if (next >= 0) return depth
-                next = side
-            }
-            if (next < 0) return depth
-            dir = next
-            depth++
-        }
-        return depth
-    }
-
     private fun opens(cellX: Int, cellZ: Int, dir: Int): Boolean = when (dir) {
         WEST -> !vWall(cellX, cellZ)
         EAST -> !vWall(cellX + 1, cellZ)
         NORTH -> !hWall(cellX, cellZ)
         else -> !hWall(cellX, cellZ + 1)
-    }
-
-    private fun doorOn(cellX: Int, cellZ: Int, dir: Int): Int = when (dir) {
-        WEST -> vDoor(cellX, cellZ)
-        EAST -> vDoor(cellX + 1, cellZ)
-        NORTH -> hDoor(cellX, cellZ)
-        else -> hDoor(cellX, cellZ + 1)
-    }
-
-    private fun stepX(dir: Int): Int = when (dir) {
-        WEST -> -1
-        EAST -> 1
-        else -> 0
-    }
-
-    private fun stepZ(dir: Int): Int = when (dir) {
-        NORTH -> -1
-        SOUTH -> 1
-        else -> 0
     }
 
     private fun flatAnomaly(

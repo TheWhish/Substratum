@@ -22,6 +22,7 @@ import net.minecraft.world.level.levelgen.Heightmap
 import net.minecraft.world.level.levelgen.RandomState
 import net.minecraft.world.level.levelgen.blending.Blender
 import net.minecraft.world.level.levelgen.structure.StructureSet
+import xyz.thewhish.substratum.client.Link
 import xyz.thewhish.substratum.level.Epoch
 import xyz.thewhish.substratum.registry.ModBlocks
 import java.util.concurrent.CompletableFuture
@@ -165,7 +166,7 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
         val ceilingClean = pitRoom || dirtThinned(layout, x, ceiling, z)
         val tile = if (ceilingClean) Palette.ceilingTileClean else Palette.ceilingTile
         if (!solid) {
-            if (y == FLOOR_Y + 1 && column and MazeLayout.PIT_ROOM == 0 && layout.almondWaterAt(x, z)) {
+            if (y == FLOOR_Y + 1 && column and MazeLayout.PIT_ROOM == 0 && stashed(layout, x, z, column)) {
                 return if (layout.flashlightAt(x, z)) Palette.flashlight else Palette.almondWater
             }
             if (y < ceiling) return Palette.air
@@ -194,6 +195,11 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
             FLOOR_Y + 1 -> if (clean) Palette.wallpaperBottomClean else Palette.wallpaperBottom
             else -> if (clean) Palette.wallpaperClean else Palette.wallpaper
         }
+    }
+
+    private fun stashed(layout: MazeLayout, x: Int, z: Int, column: Int): Boolean {
+        val players = Link.hostedSession()?.participants?.size ?: 1
+        return layout.stashAt(x, z, column and MazeLayout.DARK_ZONE != 0, MazeLayout.plenty(players))
     }
 
     private fun dirtThinned(layout: MazeLayout, x: Int, y: Int, z: Int): Boolean =
