@@ -26,6 +26,8 @@ def checks = [
         presenceCheck: "client.PresenceCheckKt",
         spawnCheck   : "level.SpawnPlanCheckKt",
         runCheck     : "level.RunStateCheckKt",
+        collapseCheck: "client.CollapseCheckKt",
+        footageCheck : "client.FootageCheckKt",
 ]
 
 checks.each { name, main ->

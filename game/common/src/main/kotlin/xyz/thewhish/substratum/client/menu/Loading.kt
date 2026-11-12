@@ -51,31 +51,37 @@ object Loading {
     }
 
     fun renderHud(graphics: GuiGraphics) {
-        if (started == 0L) return
-        val opacity = fade(graphics, AWAKE)
-        listen(Minecraft.getInstance(), 1f - opacity)
+        if (started != 0L) fade(graphics, AWAKE)
+    }
+
+    fun hear(volume: Float) {
+        val opacity = if (started == 0L) 0f else opacity(AWAKE)
+        listen(Minecraft.getInstance(), (1f - opacity) * volume)
     }
 
     private fun covers(screen: Screen): Boolean =
         screen is LevelLoadingScreen || screen is ReceivingLevelScreen || screen is GenericMessageScreen ||
             screen is ProgressScreen || screen is ConnectScreen || screen is WaitScreen
 
-    private fun fade(graphics: GuiGraphics, length: Long): Float {
+    private fun fade(graphics: GuiGraphics, length: Long) {
+        val opacity = opacity(length)
+        if (opacity > 0f) draw(graphics, opacity)
+    }
+
+    private fun opacity(length: Long): Float {
         val release = max(seen, started + HOLD)
         val progress = (Util.getMillis() - release).toFloat() / length
         if (progress >= 1f) {
             started = 0L
             return 0f
         }
-        val opacity = 1f - Mth.smoothstep(progress.coerceAtLeast(0f).toDouble()).toFloat()
-        draw(graphics, opacity)
-        return opacity
+        return 1f - Mth.smoothstep(progress.coerceAtLeast(0f).toDouble()).toFloat()
     }
 
     private fun listen(minecraft: Minecraft, volume: Float) {
         val engine = (minecraft.soundManager as SoundManagerAccessor).`substratum$engine`() as SoundEngineAccessor
         if (!engine.`substratum$loaded`()) return
-        engine.`substratum$listener`().setGain(minecraft.options.getSoundSourceVolume(SoundSource.MASTER) * volume)
+        engine.`substratum$listener`().setGain(minecraft.options.getSoundSourceVolume(SoundSource.MASTER) * volume * volume * volume)
     }
 
     private fun draw(graphics: GuiGraphics, opacity: Float) {

@@ -2,11 +2,14 @@ package xyz.thewhish.substratum.voice
 
 import de.maxhenkel.voicechat.api.ClientVoicechatSocket
 import de.maxhenkel.voicechat.api.RawUdpPacket
+import de.maxhenkel.voicechat.api.VoicechatApi
 import de.maxhenkel.voicechat.api.VoicechatPlugin
 import de.maxhenkel.voicechat.api.VoicechatSocket
 import de.maxhenkel.voicechat.api.events.ClientVoicechatInitializationEvent
 import de.maxhenkel.voicechat.api.events.EventRegistration
+import de.maxhenkel.voicechat.api.events.MicrophonePacketEvent
 import de.maxhenkel.voicechat.api.events.VoicechatServerStartingEvent
+import dev.architectury.event.events.common.TickEvent
 import dev.architectury.platform.Platform
 import dev.architectury.utils.Env
 import xyz.thewhish.substratum.Substratum
@@ -16,11 +19,19 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.SocketAddress
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
 object VoicePlugin : VoicechatPlugin {
 
+    @Volatile
+    private var mourners: List<UUID> = emptyList()
+
     override fun getPluginId() = Substratum.ID
+
+    override fun initialize(api: VoicechatApi) {
+        TickEvent.SERVER_POST.register { server -> mourners = server.playerList.players.filter { it.isSpectator }.map { it.uuid } }
+    }
 
     override fun registerEvents(registration: EventRegistration) {
         registration.registerEvent(VoicechatServerStartingEvent::class.java) { event ->
@@ -28,6 +39,19 @@ object VoicePlugin : VoicechatPlugin {
         }
         registration.registerEvent(ClientVoicechatInitializationEvent::class.java) { event ->
             event.socketImplementation = GuestSocket()
+        }
+        registration.registerEvent(MicrophonePacketEvent::class.java, ::mourn)
+    }
+
+    private fun mourn(event: MicrophonePacketEvent) {
+        val sender = event.senderConnection?.player?.uuid ?: return
+        val listeners = mourners
+        if (sender !in listeners) return
+        event.cancel()
+        val api = event.voicechat
+        val packet = event.packet.toStaticSoundPacket()
+        for (listener in listeners) {
+            if (listener != sender) api.getConnectionOf(listener)?.let { api.sendStaticSoundPacketTo(it, packet) }
         }
     }
 }

@@ -10,6 +10,7 @@ import net.minecraft.world.level.ClipContext
 import net.minecraft.world.level.Level
 import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
+import org.joml.Quaternionf
 import org.joml.Vector3f
 import xyz.thewhish.substratum.item.FlashlightItem
 import xyz.thewhish.substratum.level.SubstratumLevels
@@ -65,6 +66,7 @@ object Flashlights {
 
     private val aim = Vector3f()
     private var aiming = false
+    private var viewerId = 0
     private var lastFrame = 0L
 
     fun update(minecraft: Minecraft, partialTick: Float) {
@@ -73,20 +75,21 @@ object Flashlights {
         lastFrame = now
         count = 0
         val level = minecraft.level?.takeIf { it.dimension() == SubstratumLevels.LEVEL_0 }
-        val local = minecraft.player
-        if (level == null || local == null) {
+        val viewer = minecraft.cameraEntity as? Player ?: minecraft.player
+        if (level == null || viewer == null) {
             aiming = false
             dazzle = 0f
             return
         }
-        if (hand(local) == null) aiming = false
+        if (hand(viewer) == null || viewer.id != viewerId) aiming = false
+        viewerId = viewer.id
         val camera = minecraft.gameRenderer.mainCamera.position
         level.players()
-            .filter { hand(it) != null && (it === local || it.distanceToSqr(camera) < REACH * REACH) }
-            .sortedBy { if (it === local) -1.0 else it.distanceToSqr(camera) }
+            .filter { hand(it) != null && !it.isSpectator && (it === viewer || it.distanceToSqr(camera) < REACH * REACH) }
+            .sortedBy { if (it === viewer) -1.0 else it.distanceToSqr(camera) }
             .take(MAX)
-            .forEach { aim(beams[count++], it, it === local && minecraft.options.cameraType.isFirstPerson, minecraft, partialTick, seconds) }
-        squint(level, local, partialTick, seconds)
+            .forEach { aim(beams[count++], it, it === viewer, minecraft, partialTick, seconds) }
+        squint(level, viewer, partialTick, seconds)
     }
 
     private fun squint(level: Level, viewer: Player, partialTick: Float, seconds: Float) {
@@ -119,20 +122,34 @@ object Flashlights {
     private fun hand(player: Player): InteractionHand? =
         InteractionHand.entries.firstOrNull { FlashlightItem.power(player.getItemInHand(it)) > 0f }
 
-    private fun aim(beam: Beam, player: Player, firstPerson: Boolean, minecraft: Minecraft, partialTick: Float, seconds: Float) {
+    private fun aim(beam: Beam, player: Player, own: Boolean, minecraft: Minecraft, partialTick: Float, seconds: Float) {
         val hand = hand(player) ?: return
         val arm = if (hand == InteractionHand.MAIN_HAND) player.mainArm else player.mainArm.opposite
         val side = if (arm == HumanoidArm.RIGHT) 1.0 else -1.0
-        val origin = if (firstPerson) lens(minecraft.gameRenderer.mainCamera, player, side) else grip(player, side, partialTick)
+        val camera = minecraft.gameRenderer.mainCamera
+        val falling = if (own && minecraft.options.cameraType.isFirstPerson) null else Collapse.look(player, partialTick)
+        val origin = when {
+            falling != null -> held(falling.first, falling.second, side)
+            own && minecraft.options.cameraType.isFirstPerson -> lens(camera, player, side)
+            else -> grip(player, side, partialTick)
+        }
         beam.x = origin.x
         beam.y = origin.y
         beam.z = origin.z
-        val view = player.getViewVector(partialTick)
-        beam.direction.set(view.x, view.y, view.z)
-        if (player === minecraft.player) follow(beam.direction, seconds)
+        when {
+            falling != null -> falling.second.transform(beam.direction.set(0f, 0f, -1f))
+            own && minecraft.options.cameraType.isFirstPerson -> beam.direction.set(camera.lookVector)
+            else -> player.getViewVector(partialTick).let { beam.direction.set(it.x, it.y, it.z) }
+        }
+        if (own) follow(beam.direction, seconds)
         beam.power = FlashlightItem.power(player.getItemInHand(hand))
-        beam.haze = if (player === minecraft.player) OWN_HAZE else 1f
+        beam.haze = if (own) OWN_HAZE else 1f
         beam.owner = player.id
+    }
+
+    private fun held(eye: Vec3, rotation: Quaternionf, side: Double): Vec3 {
+        val offset = rotation.transform(Vector3f((GRIP_SIDE * side).toFloat(), -GRIP_DROP.toFloat(), -GRIP_FORWARD.toFloat()))
+        return eye.add(offset.x.toDouble(), offset.y.toDouble(), offset.z.toDouble())
     }
 
     private fun lens(camera: Camera, player: Player, side: Double): Vec3 {

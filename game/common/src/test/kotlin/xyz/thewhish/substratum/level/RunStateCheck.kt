@@ -16,6 +16,7 @@ fun main() {
     newcomersStartEmptyHanded()
     onlyTransitionsTouchTheSave()
     soloFollowsTheSameRules()
+    theDyingStayOnAirUntilTheyFall()
     println("run: every row of the run table holds")
 }
 
@@ -96,6 +97,24 @@ private fun onlyTransitionsTouchTheSave() {
     run.join(THIRD)
     run.wipe()
     check(run.save == save) { "only a transition may change the save, got ${run.save}" }
+}
+
+private fun theDyingStayOnAirUntilTheyFall() {
+    val run = started()
+    check(run.lose(HOST, until = 100)) { "the living must be able to start dying" }
+    check(run.isLost(HOST) && run.isDying(HOST)) { "a dying player is already lost but still falling" }
+    check(run.watchable(HOST)) { "the team must keep watching a falling player" }
+    check(!run.fallen(listOf(HOST))) { "the level must not restart before the last fall ends" }
+    check(run.expire(99).isEmpty()) { "a fall must not end early" }
+    check(run.expire(100) == listOf(HOST)) { "a fall must end on time" }
+    check(!run.isDying(HOST) && !run.watchable(HOST)) { "a finished fall leaves only a watcher" }
+    check(run.fallen(listOf(HOST))) { "the level restarts once the last fall ends" }
+    check(run.lose(FRIEND, until = 50)) { "a second player must be able to start dying" }
+    run.leave(FRIEND, "lamp")
+    check(!run.isDying(FRIEND) && run.expire(1_000).isEmpty()) { "leaving mid-fall must cancel the fall" }
+    check(run.lose(THIRD, until = 50)) { "a third player must be able to start dying" }
+    run.wipe()
+    check(!run.isDying(THIRD) && run.expire(1_000).isEmpty()) { "a restart must cancel every fall" }
 }
 
 private fun soloFollowsTheSameRules() {

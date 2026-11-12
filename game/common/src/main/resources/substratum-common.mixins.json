@@ -17,10 +17,13 @@
     "WorldDimensionsMixin"
   ],
   "client": [
+    "ArmInvoker",
     "AtmosphereMixin",
     "BackroomsLightMixin",
     "BenchFrameMixin",
-    "BrightnessLockMixin",
+    "OptionLockMixin",
+    "CameraPacketMixin",
+    "CorpsePickMixin",
     "CarriedItemInvoker",
     "ClientLightOrderMixin",
     "DebugKeysMixin",
@@ -29,11 +32,16 @@
     "DrinkingViewMixin",
     "DropStackMixin",
     "EntityLightMixin",
+    "FallingCameraMixin",
+    "FeedOverlayMixin",
     "FogMixin",
+    "FrozenMouseMixin",
+    "SpectatorMenuMixin",
     "HeldFlashlightMixin",
     "HotbarScrollMixin",
     "FovMixin",
     "HearingMixin",
+    "HiddenSpectatorMixin",
     "HudMixin",
     "LocalSkinMixin",
     "LoopbackHostMixin",
@@ -50,7 +58,9 @@
     "SuitAnimationMixin",
     "SuitModelMixin",
     "SuitRendererMixin",
-    "ToastMixin"
+    "ToastMixin",
+    "WatchedArmMixin",
+    "WatchedHandsMixin"
   ],
   "injectors": { "defaultRequire": 1 }
 }

@@ -18,7 +18,7 @@ class RemainsRenderer(context: EntityRendererProvider.Context) : EntityRenderer<
     override fun render(remains: Remains, yaw: Float, partialTick: Float, poseStack: PoseStack, buffers: MultiBufferSource, light: Int) {
         val level = remains.level() as? ClientLevel ?: return
         val corpse = corpses.getOrPut(remains) { Corpse(level, remains.owner) }
-        corpse.follow(remains.tickCount + partialTick, remains.yRot)
+        corpse.follow(remains.yRot, remains.held)
         Minecraft.getInstance().entityRenderDispatcher.getRenderer(corpse).render(corpse, remains.yRot, partialTick, poseStack, buffers, light)
     }
 

@@ -17,7 +17,6 @@ import net.minecraft.world.level.Level
 import qouteall.imm_ptl.core.ClientWorldLoader
 import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.client.menu.Backdrop
-import xyz.thewhish.substratum.client.menu.Loading
 import xyz.thewhish.substratum.client.menu.Menus
 import xyz.thewhish.substratum.level.SubstratumLevels
 import xyz.thewhish.substratum.network.ViewportSync
@@ -42,6 +41,7 @@ object SubstratumClient {
             reportViewportIfChanged()
             turnSmilers(level)
             Drinking.tick(level)
+            Collapse.tick(level)
         }
         ClientTickEvent.CLIENT_POST.register(::preparePortalWorlds)
         ClientTickEvent.CLIENT_POST.register(LampHum::tick)
@@ -55,15 +55,17 @@ object SubstratumClient {
         ClientTickEvent.CLIENT_POST.register(Vhs::tick)
         ClientTickEvent.CLIENT_POST.register(Labels::tick)
         ClientGuiEvent.RENDER_HUD.register(Vhs::renderHud)
-        ClientGuiEvent.RENDER_HUD.register { graphics, _ -> Feed.renderHud(graphics) }
+        ClientTickEvent.CLIENT_PRE.register(Collapse::freeze)
         ClientTickEvent.CLIENT_PRE.register(Feed::tick)
         ClientTickEvent.CLIENT_PRE.register(Hotbar::guard)
         ClientTickEvent.CLIENT_POST.register(Hotbar::tick)
+        ClientTickEvent.CLIENT_POST.register(Footage::tick)
+        ClientTickEvent.CLIENT_POST.register(WatchedHands::tick)
         ClientGuiEvent.RENDER_HUD.register(Hotbar::render)
         ClientGuiEvent.RENDER_HUD.register(Reticle::render)
+        ClientGuiEvent.RENDER_HUD.register { graphics, _ -> Feed.renderHud(graphics) }
         ClientTickEvent.CLIENT_POST.register(ProbeView::tick)
         ClientGuiEvent.RENDER_HUD.register { graphics, _ -> ProbeView.renderHud(graphics) }
-        ClientGuiEvent.RENDER_HUD.register { graphics, _ -> Loading.renderHud(graphics) }
         ClientConfig.load()
         ReloadListenerRegistry.register(PackType.CLIENT_RESOURCES, ResourceManagerReloadListener {
             ClientConfig.load()
@@ -82,6 +84,8 @@ object SubstratumClient {
             SanityClient.reset()
             Vhs.reset()
             Feed.reset()
+            Footage.reset()
+            Collapse.reset()
             ProbeView.reset()
             Atmosphere.forget()
             FlashlightSwitch.reset()

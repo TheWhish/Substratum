@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import xyz.thewhish.substratum.client.Collapse;
 import xyz.thewhish.substratum.client.Figure;
 import xyz.thewhish.substratum.client.SuitMarks;
 
@@ -33,6 +34,7 @@ abstract class SuitRendererMixin extends LivingEntityRenderer<AbstractClientPlay
     )
     private void substratum(AbstractClientPlayer player, PoseStack poseStack, float bob, float yaw, float partialTick, float scale, CallbackInfo ci) {
         if (player instanceof Figure figure) figure.slump(poseStack);
+        else Collapse.slump(player, poseStack, partialTick);
     }
 
     @Inject(

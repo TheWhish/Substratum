@@ -32,7 +32,7 @@ object Reticle {
 
     private fun aimed(minecraft: Minecraft): Boolean {
         val player = minecraft.player ?: return false
-        if (player.isSpectator || minecraft.screen != null) return false
+        if (player.isSpectator || minecraft.screen != null || Collapse.falling(player)) return false
         return when (val hit = minecraft.hitResult) {
             is BlockHitResult -> hit.type == HitResult.Type.BLOCK && minecraft.level?.getBlockState(hit.blockPos)?.`is`(INTERACTABLE) == true
             is EntityHitResult -> (hit.entity as? Remains)?.stocked == true

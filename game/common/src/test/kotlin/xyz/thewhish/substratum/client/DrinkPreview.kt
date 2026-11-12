@@ -24,7 +24,7 @@ import kotlin.math.tan
 
 internal class Quad(val points: List<Vector3f>, val color: Color)
 
-private class Collector(private val texture: BufferedImage) : VertexConsumer {
+internal class Collector(private val texture: BufferedImage) : VertexConsumer {
     private val corners = ArrayList<Vector3f>()
     private var u = 0f
     private var v = 0f
@@ -55,7 +55,7 @@ private fun sample(texture: BufferedImage, u: Float, v: Float): Color {
     return Color(texture.getRGB(x, y), true)
 }
 
-private fun image(path: String): BufferedImage =
+internal fun image(path: String): BufferedImage =
     ImageIO.read(Suit::class.java.classLoader.getResourceAsStream(path) ?: error("missing $path"))
 
 internal object Bottle {
@@ -195,7 +195,7 @@ private const val FIRST_HEIGHT = 180
 private const val ZOOM = 180f
 private const val FOV = 70.0
 
-private fun paint(image: BufferedImage, quads: List<Quad>, project: (Vector3f) -> Pair<Float, Float>?, depth: (Vector3f) -> Float) {
+internal fun paint(image: BufferedImage, quads: List<Quad>, project: (Vector3f) -> Pair<Float, Float>?, depth: (Vector3f) -> Float) {
     val buffer = FloatArray(image.width * image.height) { Float.MAX_VALUE }
     val drawn = quads.mapNotNull { quad ->
         val points = quad.points.map(project)
@@ -240,7 +240,7 @@ private fun fill(image: BufferedImage, buffer: FloatArray, points: List<Pair<Flo
     }
 }
 
-private fun view(angle: Double): Pair<Vector3f, Vector3f> {
+internal fun view(angle: Double): Pair<Vector3f, Vector3f> {
     val forward = Vector3f(sin(angle).toFloat(), 0f, cos(angle).toFloat())
     val right = Vector3f(forward).cross(Vector3f(0f, -1f, 0f))
     return forward to right

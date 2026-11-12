@@ -13,6 +13,7 @@ class RunState<T : Any> {
     private val saved = HashMap<UUID, T>()
     private val departed = HashMap<UUID, T?>()
     private val lost = HashSet<UUID>()
+    private val dying = HashMap<UUID, Int>()
 
     val save: Map<UUID, T> get() = saved
 
@@ -24,12 +25,14 @@ class RunState<T : Any> {
         saved.putAll(entries)
         departed.clear()
         lost.clear()
+        dying.clear()
     }
 
     fun begin(): Boolean {
         if (begun) return false
         begun = true
         lost.clear()
+        dying.clear()
         return true
     }
 
@@ -37,7 +40,11 @@ class RunState<T : Any> {
 
     fun isLost(id: UUID): Boolean = id in lost
 
-    fun fallen(online: Collection<UUID>): Boolean = begun && online.isNotEmpty() && online.all { it in lost }
+    fun isDying(id: UUID): Boolean = id in dying
+
+    fun watchable(id: UUID): Boolean = id !in lost || id in dying
+
+    fun fallen(online: Collection<UUID>): Boolean = begun && online.isNotEmpty() && online.all { it in lost && it !in dying }
 
     fun join(id: UUID): T? {
         lost.add(id)
@@ -48,9 +55,20 @@ class RunState<T : Any> {
         if (!begun) return
         departed[id] = snapshot
         lost.remove(id)
+        dying.remove(id)
     }
 
-    fun lose(id: UUID): Boolean = begun && lost.add(id)
+    fun lose(id: UUID, until: Int? = null): Boolean {
+        if (!begun || !lost.add(id)) return false
+        if (until != null) dying[id] = until
+        return true
+    }
+
+    fun expire(now: Int): List<UUID> {
+        val done = dying.filterValues { now >= it }.keys.toList()
+        done.forEach(dying::remove)
+        return done
+    }
 
     fun advance(online: Map<UUID, T>) {
         level++
@@ -70,5 +88,6 @@ class RunState<T : Any> {
     private fun restart() {
         area++
         lost.clear()
+        dying.clear()
     }
 }

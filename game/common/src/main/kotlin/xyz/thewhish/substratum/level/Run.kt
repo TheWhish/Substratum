@@ -11,9 +11,12 @@ import net.minecraft.nbt.NbtUtils
 import net.minecraft.nbt.Tag
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.util.Mth
 import net.minecraft.world.level.GameType
+import net.minecraft.world.phys.Vec3
 import net.minecraft.world.level.storage.LevelResource
 import xyz.thewhish.substratum.Substratum
+import xyz.thewhish.substratum.client.Collapse
 import xyz.thewhish.substratum.network.FeedSync
 import xyz.thewhish.substratum.network.Gate
 import xyz.thewhish.substratum.sanity.SanityTracker
@@ -28,11 +31,14 @@ object Run {
     private const val FILE = "substratum-run.dat"
     private const val SHIFT = 4096
     private const val SILENCE = 60
+    private const val BYTE_TURN = 256f
 
     private class Entry(val items: ListTag, val sanity: Int)
 
     private val state = RunState<Entry>()
+    private val landings = HashMap<UUID, Footprint.Landing>()
     private var silenceAt = -1
+    private var born = 0L
 
     val level: Int get() = state.level
 
@@ -43,27 +49,34 @@ object Run {
         TickEvent.SERVER_POST.register(::tick)
     }
 
-    fun alive(players: List<ServerPlayer>): List<ServerPlayer> = players.filter { !state.isLost(it.uuid) }.sortedBy { it.uuid }
+    private fun channels(players: List<ServerPlayer>): List<ServerPlayer> = players.filter { state.watchable(it.uuid) }.sortedBy { it.uuid }
 
-    fun turn(player: ServerPlayer, forward: Boolean) {
-        if (!state.isLost(player.uuid)) return
-        val alive = alive(player.server.playerList.players)
-        if (alive.isEmpty()) return
-        val current = alive.indexOfFirst { it === player.camera }
-        val next = if (current < 0) 0 else Math.floorMod(current + if (forward) 1 else -1, alive.size)
-        player.setCamera(alive[next])
+    fun watch(player: ServerPlayer, target: UUID) {
+        if (!state.isLost(player.uuid) || state.isDying(player.uuid)) return
+        channels(player.server.playerList.players).firstOrNull { it.uuid == target }?.let(player::setCamera)
     }
 
     fun begin(server: MinecraftServer) {
         val players = server.playerList.players
         if (players.isEmpty() || Epoch.frozen || !state.begin()) return
+        born = server.overworld().gameTime
         players.forEach { apply(it, state.entry(it.uuid)) }
         start(server, players)
     }
 
+    fun falling(player: ServerPlayer): Boolean = state.isDying(player.uuid)
+
     fun lose(player: ServerPlayer) {
-        if (!state.lose(player.uuid)) return
-        Remains.leave(player)
+        val server = player.server
+        if (!state.lose(player.uuid, until = server.tickCount + Collapse.TICKS)) return
+        val found = Remains.landing(player)
+        val landing = found.copy(yaw = Mth.floor(found.yaw * BYTE_TURN / 360f).toByte() * 360f / BYTE_TURN)
+        landings[player.uuid] = landing
+        FeedSync.fall(server, player.uuid, landing)
+    }
+
+    private fun die(player: ServerPlayer) {
+        Remains.leave(player, landings.remove(player.uuid) ?: Footprint.Landing(player.yRot, Vec3.ZERO))
         SanityTracker.set(player, 0)
         spectate(player)
     }
@@ -78,6 +91,7 @@ object Run {
 
     private fun load(server: MinecraftServer) {
         silenceAt = -1
+        landings.clear()
         val file = file(server)
         if (!Files.exists(file)) return state.load(0, emptyMap())
         val root = try {
@@ -120,6 +134,7 @@ object Run {
                 apply(player, state.join(player.uuid))
                 spectate(player)
                 if (silenceAt >= 0) FeedSync.signal(player, live = false)
+                FeedSync.tape(player, born, state.level)
             }
             Gate.released -> begin(player.server)
             player.level().dimension() != SubstratumLevels.LEVEL_0 -> Arrival.send(player)
@@ -127,20 +142,23 @@ object Run {
     }
 
     private fun left(player: ServerPlayer) {
+        if (landings.remove(player.uuid) != null) FeedSync.rise(player.server, player.uuid)
         state.leave(player.uuid, snapshot(player))
     }
 
     private fun tick(server: MinecraftServer) {
         val players = server.playerList.players
         if (!state.begun || players.isEmpty()) return
+        val fallen = state.expire(server.tickCount)
+        players.filter { it.uuid in fallen }.forEach(::die)
         if (state.fallen(players.map { it.uuid })) return fade(server, players)
         silenceAt = -1
-        val alive = alive(players)
+        val channels = channels(players)
         for (player in players) {
-            if (!state.isLost(player.uuid)) continue
+            if (!state.isLost(player.uuid) || state.isDying(player.uuid)) continue
             if (!player.isSpectator) player.setGameMode(GameType.SPECTATOR)
             val camera = player.camera
-            if (alive.none { it === camera }) player.setCamera(alive.first())
+            if (channels.none { it === camera }) player.setCamera(channels.first())
         }
     }
 
@@ -153,22 +171,26 @@ object Run {
         if (now - silenceAt < SILENCE) return
         silenceAt = -1
         state.wipe()
+        born = server.overworld().gameTime
         players.forEach { apply(it, null) }
         start(server, players)
         players.forEach { FeedSync.signal(it, live = true) }
     }
 
     private fun start(server: MinecraftServer, players: List<ServerPlayer>) {
+        landings.keys.forEach { FeedSync.rise(server, it) }
+        landings.clear()
         for (player in players) {
             player.setCamera(player)
             player.setGameMode(server.defaultGameType)
+            FeedSync.tape(player, born, state.level)
         }
         Arrival.spread(server, players, MazeLayout.CENTRE + state.area * SHIFT, MazeLayout.CENTRE)
     }
 
     private fun spectate(player: ServerPlayer) {
         player.setGameMode(GameType.SPECTATOR)
-        alive(player.server.playerList.players).firstOrNull()?.let(player::setCamera)
+        channels(player.server.playerList.players).firstOrNull { it !== player }?.let(player::setCamera)
     }
 
     private fun apply(player: ServerPlayer, entry: Entry?) {

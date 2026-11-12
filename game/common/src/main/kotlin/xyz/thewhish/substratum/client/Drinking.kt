@@ -184,8 +184,8 @@ object Drinking {
     @JvmStatic
     fun viewPitch(): Float {
         if (ClientConfig.motionSicknessSafe) return 0f
-        val player = Minecraft.getInstance().player ?: return 0f
-        return VIEW_PITCH * (motions[player]?.head?.at(partialTick()) ?: 0f)
+        val viewer = Minecraft.getInstance().cameraEntity as? LivingEntity ?: return 0f
+        return VIEW_PITCH * (motions[viewer]?.head?.at(partialTick()) ?: 0f)
     }
 
     internal fun grip(arm: HumanoidArm, pose: PoseStack) {

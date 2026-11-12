@@ -78,6 +78,7 @@ object Suit {
         model.leftArm.getChild(FOREARM).resetPose()
         model.rightLeg.getChild(SHIN).resetPose()
         model.leftLeg.getChild(SHIN).resetPose()
+        Drinking.pose(model, entity)
         if (entity is Figure) return rest(model, entity)
         val motion = motions.getOrPut(entity) { Motion(ageInTicks) }
         motion.follow(entity, ageInTicks)
@@ -89,7 +90,7 @@ object Suit {
             setRotation(motion.lean.position, motion.twist.position, Mth.sin(step) * PACK_ROLL * limbSwingAmount)
         }
         model.body.getChild(LAMP).setRotation(motion.swing.position + Mth.cos(step * 2) * LAMP_STEP * limbSwingAmount, 0f, motion.sway.position)
-        Drinking.pose(model, entity)
+        Collapse.pose(model, entity)
     }
 
     @JvmStatic

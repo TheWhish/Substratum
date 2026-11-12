@@ -151,7 +151,7 @@ class MainMenu(private var note: Component? = null) : Screen(Component.literal(T
 
     private fun drawTape(graphics: GuiGraphics) {
         val seconds = (Util.getMillis() - opened) / 1000
-        val tape = "%02d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60)
+        val tape = Menus.tape(seconds)
         graphics.drawString(font, tape, width - EDGE - font.width(tape) + 1, height - EDGE - GLYPH, Menus.MUTE, false)
     }
 
