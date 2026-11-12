@@ -43,6 +43,7 @@ object VoicePlugin : VoicechatPlugin {
         registration.registerEvent(MicrophonePacketEvent::class.java, ::mourn)
     }
 
+    @Suppress("DEPRECATION")
     private fun mourn(event: MicrophonePacketEvent) {
         val sender = event.senderConnection?.player?.uuid ?: return
         val listeners = mourners
