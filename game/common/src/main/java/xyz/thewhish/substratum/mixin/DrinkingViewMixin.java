@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import xyz.thewhish.substratum.client.Drinking;
+import xyz.thewhish.substratum.client.Shock;
 
 @Mixin(GameRenderer.class)
 abstract class DrinkingViewMixin {
@@ -20,5 +21,6 @@ abstract class DrinkingViewMixin {
         original.call(renderer, pose, partialTick);
         float pitch = Drinking.viewPitch();
         if (pitch != 0f) pose.mulPose(Axis.XP.rotationDegrees(pitch));
+        Shock.shake(pose, partialTick);
     }
 }

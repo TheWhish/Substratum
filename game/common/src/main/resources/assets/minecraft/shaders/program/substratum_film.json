@@ -15,6 +15,9 @@
         { "name": "Drain", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "Vhs", "type": "float", "count": 1, "values": [ 0.0 ] },
         { "name": "VhsSeed", "type": "float", "count": 1, "values": [ 0.0 ] },
-        { "name": "VhsShake", "type": "float", "count": 1, "values": [ 1.0 ] }
+        { "name": "VhsShake", "type": "float", "count": 1, "values": [ 1.0 ] },
+        { "name": "Faint", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Blur", "type": "float", "count": 1, "values": [ 0.0 ] },
+        { "name": "Bleed", "type": "float", "count": 1, "values": [ 0.0 ] }
     ]
 }

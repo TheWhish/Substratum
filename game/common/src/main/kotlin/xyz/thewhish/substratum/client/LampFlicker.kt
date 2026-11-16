@@ -8,6 +8,7 @@ import net.minecraft.sounds.SoundSource
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.chunk.status.ChunkStatus
+import net.minecraft.world.phys.Vec3
 import qouteall.imm_ptl.core.ClientWorldLoader
 import xyz.thewhish.substratum.level.LampBursts
 import xyz.thewhish.substratum.registry.ModBlocks
@@ -28,10 +29,18 @@ object LampFlicker {
     private val GOLDEN = 0x9E3779B97F4A7C15uL.toLong()
     private val BURST_ODDS = longArrayOf(30L, 110L, 220L)
     private val OUTAGE_ODDS = longArrayOf(20L, 64L, 120L)
+    private const val STUTTER_RANGE = 8
+    private val STUTTER = intArrayOf(2, 2, 3, 3, 2)
 
     private val lamps = HashSet<BlockPos>()
     private val off = HashSet<BlockPos>()
     private val bursts = HashMap<BlockPos, Int>()
+    private val stutters = HashMap<BlockPos, Stutter>()
+
+    private class Stutter(val shown: LampCondition) {
+        var age = 0
+        var current = LampCondition.DEAD
+    }
     private var level: ClientLevel? = null
     private var ticks = 0
 
@@ -42,10 +51,12 @@ object LampFlicker {
             level?.takeIf(::stillShown)?.let { old ->
                 off.forEach { switchTo(old, it, LampCondition.FLICKERING) }
                 bursts.keys.forEach { LightField.boost(old, it, 1f) }
+                stutters.forEach { (pos, stutter) -> if (conditionAt(old, pos) == stutter.current) switchTo(old, pos, stutter.shown) }
             }
             lamps.clear()
             off.clear()
             bursts.clear()
+            stutters.clear()
             level = current
             ticks = 0
         }
@@ -54,6 +65,7 @@ object LampFlicker {
         if (ticks++ % SCAN_INTERVAL == 0) rescan(current, BlockPos.containing(eye))
         val steady = minecraft.options.hideLightningFlash().get() || MenuShot.busy
         flash(current, steady)
+        stammer(current, eye)
         val time = current.gameTime
         val iterator = lamps.iterator()
         while (iterator.hasNext()) {
@@ -74,6 +86,42 @@ object LampFlicker {
     }
 
     fun isOff(pos: BlockPos): Boolean = pos in off
+
+    fun stutter(level: ClientLevel, near: Vec3) {
+        if (level !== this.level || Minecraft.getInstance().options.hideLightningFlash().get()) return
+        for (pos in scanBlocks(level, BlockPos.containing(near), STUTTER_RANGE) { ModBlocks.isLamp(it, LampCondition.ON) }) {
+            if (pos in stutters) continue
+            stutters[pos] = Stutter(LampCondition.ON)
+            switchTo(level, pos, LampCondition.DEAD)
+        }
+    }
+
+    private fun stammer(level: ClientLevel, eye: Vec3) {
+        val iterator = stutters.entries.iterator()
+        while (iterator.hasNext()) {
+            val (pos, stutter) = iterator.next()
+            if (conditionAt(level, pos) != stutter.current) {
+                iterator.remove()
+                continue
+            }
+            val lit = stuttering(++stutter.age)
+            val condition = if (lit != false) stutter.shown else LampCondition.DEAD
+            if (lit == null) iterator.remove()
+            if (condition == stutter.current) continue
+            stutter.current = condition
+            switchTo(level, pos, condition)
+            if (condition.lit && pos.distToCenterSqr(eye) <= SOUND_RANGE * SOUND_RANGE) strike(level, pos)
+        }
+    }
+
+    private fun stuttering(age: Int): Boolean? {
+        var left = age
+        for ((index, ticks) in STUTTER.withIndex()) {
+            if (left < ticks) return index % 2 == 1
+            left -= ticks
+        }
+        return null
+    }
 
     private fun rescan(level: ClientLevel, centre: BlockPos) {
         val reach = RANGE.toDouble() * RANGE

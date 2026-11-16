@@ -12,6 +12,7 @@ import net.minecraft.world.level.GameType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import xyz.thewhish.substratum.client.Collapse;
+import xyz.thewhish.substratum.client.Shock;
 import xyz.thewhish.substratum.client.WatchedHands;
 
 @Mixin(GameRenderer.class)
@@ -35,6 +36,7 @@ abstract class WatchedHandsMixin {
     private void substratum$renderWatchedHands(ItemInHandRenderer hands, float partialTick, PoseStack pose, MultiBufferSource.BufferSource buffers,
                                                LocalPlayer player, int light, Operation<Void> original) {
         Collapse.hands(pose, partialTick);
+        Shock.hands(pose, partialTick);
         if (!WatchedHands.render(hands, partialTick, pose, buffers)) original.call(hands, partialTick, pose, buffers, player, light);
     }
 }

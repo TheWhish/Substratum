@@ -12,6 +12,7 @@ import net.minecraft.client.model.geom.builders.PartDefinition
 import net.minecraft.util.Mth
 import net.minecraft.world.entity.HumanoidArm
 import net.minecraft.world.entity.LivingEntity
+import xyz.thewhish.substratum.smiler.client.Lunge
 import java.util.WeakHashMap
 
 object Suit {
@@ -90,6 +91,7 @@ object Suit {
             setRotation(motion.lean.position, motion.twist.position, Mth.sin(step) * PACK_ROLL * limbSwingAmount)
         }
         model.body.getChild(LAMP).setRotation(motion.swing.position + Mth.cos(step * 2) * LAMP_STEP * limbSwingAmount, 0f, motion.sway.position)
+        Lunge.flinch(model, entity)
         Collapse.pose(model, entity)
     }
 

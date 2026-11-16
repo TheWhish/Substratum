@@ -8,6 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import xyz.thewhish.substratum.client.Collapse;
+import xyz.thewhish.substratum.client.Shock;
 
 @Mixin(MouseHandler.class)
 abstract class FrozenMouseMixin {
@@ -15,6 +16,11 @@ abstract class FrozenMouseMixin {
     @WrapWithCondition(method = "turnPlayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;turn(DD)V"))
     private boolean substratum$stillWhileFalling(LocalPlayer player, double yaw, double pitch) {
         return !Collapse.frozen();
+    }
+
+    @Inject(method = "turnPlayer", at = @At("RETURN"))
+    private void substratum$flinch(double movementTime, CallbackInfo ci) {
+        Shock.turn();
     }
 
     @Inject(method = "onScroll", at = @At("HEAD"), cancellable = true)

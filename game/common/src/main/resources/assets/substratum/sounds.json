@@ -32,6 +32,35 @@
       { "name": "substratum:block/lamp_pop", "volume": 1.0, "attenuation_distance": 48 }
     ]
   },
+  "smiler.rush": {
+    "subtitle": "subtitles.substratum.smiler_rush",
+    "sounds": [
+      { "name": "substratum:smiler/rush", "volume": 1.0, "attenuation_distance": 24 }
+    ]
+  },
+  "smiler.hit": {
+    "subtitle": "subtitles.substratum.smiler_hit",
+    "sounds": [
+      { "name": "substratum:smiler/hit", "volume": 1.0, "attenuation_distance": 32 }
+    ]
+  },
+  "smiler.dissolve": {
+    "subtitle": "subtitles.substratum.smiler_dissolve",
+    "sounds": [
+      { "name": "substratum:smiler/dissolve", "volume": 0.7, "attenuation_distance": 16 }
+    ]
+  },
+  "shock.breath": {
+    "subtitle": "subtitles.substratum.shock_breath",
+    "sounds": [
+      { "name": "substratum:shock/breath", "volume": 1.0, "attenuation_distance": 12 }
+    ]
+  },
+  "shock.ringing": {
+    "sounds": [
+      { "name": "substratum:shock/ringing", "volume": 1.0 }
+    ]
+  },
   "vhs_burst": {
     "subtitle": "subtitles.substratum.vhs_burst",
     "sounds": [

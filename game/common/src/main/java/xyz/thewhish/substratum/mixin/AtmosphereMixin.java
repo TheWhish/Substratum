@@ -20,6 +20,7 @@ import xyz.thewhish.substratum.client.MenuShot;
 import xyz.thewhish.substratum.client.Probe;
 import xyz.thewhish.substratum.client.ProbeView;
 import xyz.thewhish.substratum.client.TerrainLight;
+import xyz.thewhish.substratum.smiler.client.Lunge;
 import xyz.thewhish.substratum.smiler.client.Vanish;
 
 @Mixin(GameRenderer.class)
@@ -45,11 +46,13 @@ abstract class AtmosphereMixin {
     ) {
         Probe.push("вид мира");
         TerrainLight.beforeWorld(this.minecraft, camera, deltaTracker.getGameTimeDeltaPartialTick(false));
+        Lunge.beforeFrame(deltaTracker.getGameTimeDeltaPartialTick(false));
         original.call(renderer, deltaTracker, renderBlockOutline, camera, gameRenderer, lightTexture, view, projection);
         TerrainLight.afterWorld();
         Probe.popPush("Substratum: свет ламп и дымка");
         ProbeView.capture(camera, view, projection);
         MenuShot.afterWorld(camera, view, projection);
+        Lunge.afterFrame(camera, deltaTracker.getGameTimeDeltaPartialTick(false));
         Vanish.afterFrame(camera);
         Atmosphere.renderWorld(this.minecraft, deltaTracker.getGameTimeDeltaPartialTick(false), camera, view, projection, this.renderHand);
         Probe.pop();

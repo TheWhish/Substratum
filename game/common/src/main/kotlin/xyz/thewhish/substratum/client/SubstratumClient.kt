@@ -23,6 +23,8 @@ import xyz.thewhish.substratum.network.ViewportSync
 import xyz.thewhish.substratum.registry.ModBlocks
 import xyz.thewhish.substratum.registry.ModEntities
 import xyz.thewhish.substratum.smiler.Smiler
+import xyz.thewhish.substratum.smiler.client.Embers
+import xyz.thewhish.substratum.smiler.client.Lunge
 import xyz.thewhish.substratum.smiler.client.SmilerRenderer
 
 object SubstratumClient {
@@ -53,6 +55,8 @@ object SubstratumClient {
         ClientTickEvent.CLIENT_POST.register(SanityEffects::tick)
         ClientTickEvent.CLIENT_POST.register(Atmosphere::tick)
         ClientTickEvent.CLIENT_POST.register(Vhs::tick)
+        ClientTickEvent.CLIENT_POST.register(Lunge::tick)
+        ClientTickEvent.CLIENT_POST.register(Shock::tick)
         ClientTickEvent.CLIENT_POST.register(Labels::tick)
         ClientGuiEvent.RENDER_HUD.register(Vhs::renderHud)
         ClientTickEvent.CLIENT_PRE.register(Collapse::freeze)
@@ -73,6 +77,7 @@ object SubstratumClient {
             Smaa.reset()
             Labels.reset()
             Backdrop.release()
+            Embers.reset()
         }, Substratum.id("atmosphere"))
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register {
             Lobby.entered(Minecraft.getInstance())
@@ -86,6 +91,8 @@ object SubstratumClient {
             Feed.reset()
             Footage.reset()
             Collapse.reset()
+            Lunge.reset()
+            Shock.reset()
             ProbeView.reset()
             Atmosphere.forget()
             FlashlightSwitch.reset()

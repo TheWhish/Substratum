@@ -13,6 +13,9 @@ uniform float Drain;
 uniform float Vhs;
 uniform float VhsSeed;
 uniform float VhsShake;
+uniform float Faint;
+uniform float Blur;
+uniform float Bleed;
 
 in vec2 texCoord;
 
@@ -21,6 +24,8 @@ out vec4 fragColor;
 const int SPECTRUM = 7;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 const vec3 SHADOW = vec3(1.02, 1.0, 0.94);
+const vec3 BLOOD = vec3(1.0, 0.32, 0.26);
+const int RUSH = 10;
 
 float hash(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -89,10 +94,21 @@ void main() {
         colour = fetch(uv);
     }
 
+    if (Blur > 0.0) {
+        vec3 rush = colour;
+        for (int i = 1; i < RUSH; i++) rush += fetch(mix(uv, vec2(0.5), Blur * float(i) / float(RUSH - 1)));
+        colour = rush / float(RUSH);
+    }
+
     float tunnel = Tunnel * smoothstep(0.15, 0.95, radius);
     colour = mix(colour, vec3(dot(colour, LUMA)), clamp(Drain + tunnel, 0.0, 1.0));
     colour *= 1.0 - clamp(0.85 * tunnel, 0.0, 1.0);
     colour *= 1.0 - Vignette * Strength * smoothstep(0.4, 1.15, radius);
+    if (Faint > 0.0) colour *= pow(max(dot(colour, LUMA), 1.0e-4), 2.6 * Faint) * (1.0 - 0.2 * Faint);
+    if (Bleed > 0.0) {
+        float edge = Bleed * smoothstep(0.2, 1.0, radius);
+        colour = mix(colour, colour * BLOOD * (1.0 - 0.6 * edge), clamp(edge, 0.0, 1.0));
+    }
     colour = mix(dot(colour, LUMA) * SHADOW, colour, 0.5 + 0.5 * smoothstep(0.0, 0.0015, dot(colour, LUMA)));
 
     colour = pow(max(colour, 0.0), vec3(1.0 / 2.2));

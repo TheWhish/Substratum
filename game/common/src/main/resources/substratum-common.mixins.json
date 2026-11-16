@@ -18,6 +18,7 @@
   ],
   "client": [
     "ArmInvoker",
+    "ChannelAccessor",
     "AtmosphereMixin",
     "BackroomsLightMixin",
     "BenchFrameMixin",
@@ -52,6 +53,7 @@
     "ReplayPositionMixin",
     "SceneDepthMixin",
     "ScreenGateMixin",
+    "ShakenPaceMixin",
     "SkyBlackoutMixin",
     "SoundEngineAccessor",
     "SoundManagerAccessor",

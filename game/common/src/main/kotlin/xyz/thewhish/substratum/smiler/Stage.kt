@@ -40,12 +40,13 @@ class Stage(val level: ServerLevel, val layout: MazeLayout) {
 
     fun weigh(x: Int, z: Int): Double {
         val spot = Spots.at(x, z)
-        if (!level.isPositionEntityTicking(BlockPos.containing(spot))) return 0.0
-        if (!level.noCollision(bodyAt(spot))) return 0.0
+        if (!fits(spot)) return 0.0
         val lit = gaze.lit(spot.add(0.0, Smiler.FACE_CENTRE, 0.0))
         val dark = layout.columnAt(x, z) and MazeLayout.DARK_ZONE != 0
         return 1.0 / (1.0 + GLOOM * lit.light) * (if (lit.sick) SICK else 1.0) * (if (dark) DARK else 1.0)
     }
+
+    fun fits(spot: Vec3): Boolean = level.isPositionEntityTicking(BlockPos.containing(spot)) && level.noCollision(bodyAt(spot))
 
     fun cue(spots: List<Vec3>, anyTurn: Boolean, spared: Set<UUID> = emptySet()): Cue {
         val targets = spots.flatMap { seers(it, anyTurn) }.distinct().filter { it.uuid !in spared }

@@ -4,7 +4,9 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.mojang.brigadier.context.CommandContext
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.commands.Commands
+import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
+import net.minecraft.util.Mth
 import xyz.thewhish.substratum.gaze.Probe
 import xyz.thewhish.substratum.level.LampBursts
 import xyz.thewhish.substratum.network.VhsSync
@@ -21,6 +23,12 @@ object DebugCommand {
         }
         return Commands.literal("debug")
             .then(visit)
+            .then(
+                Commands.literal("ambush")
+                    .executes { ambush(it, null) }
+                    .then(Commands.literal("real").executes { ambush(it, false) })
+                    .then(Commands.literal("fake").executes { ambush(it, true) })
+            )
             .then(Commands.literal("clear").executes(::clear))
             .then(
                 Commands.literal("gaze")
@@ -37,6 +45,21 @@ object DebugCommand {
         val player = context.source.playerOrException
         if (!SmilerDirector.conjure(player, approach)) return fail(context, "No place for a smiler here: stand on the Level 0 floor with open corridors around")
         return done(context, "A smiler is coming (${approach?.name?.lowercase() ?: "any approach"})")
+    }
+
+    private fun ambush(context: CommandContext<CommandSourceStack>, fake: Boolean?): Int {
+        val player = context.source.playerOrException
+        SmilerDirector.disarm()
+        val lair = SmilerDirector.ambush(player, fake) ?: return fail(context, "No tight corner ahead: look down a corridor that turns within 14 blocks")
+        val stand = lair.seenFrom
+        val yaw = Mth.wrapDegrees(Mth.atan2(lair.at.z - stand.z - 0.5, lair.at.x - stand.x - 0.5).toFloat() * Mth.RAD_TO_DEG - 90f)
+        val teleport = "/tp @s ${stand.x + 0.5} ${player.y} ${stand.z + 0.5} $yaw 0"
+        context.source.sendSuccess({
+            Component.literal("The smiler lies in wait at %.1f %.1f, first seen from %.1f blocks at %d %d: [look]".format(lair.at.x, lair.at.z, lair.reveal, stand.x, stand.z)).withStyle {
+                it.withClickEvent(ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, teleport))
+            }
+        }, false)
+        return 1
     }
 
     private fun clear(context: CommandContext<CommandSourceStack>): Int {

@@ -29,7 +29,7 @@ object Vanish {
         frame++
     }
 
-    private fun visible(level: ClientLevel, camera: Camera, smiler: Smiler): Boolean {
+    internal fun visible(level: ClientLevel, camera: Camera, smiler: Smiler): Boolean {
         if (smiler.drawnFrame != frame) return false
         if (smiler.portalFrame == frame) return true
         val eye = camera.position

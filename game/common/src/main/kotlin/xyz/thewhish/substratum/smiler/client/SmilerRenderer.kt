@@ -30,6 +30,7 @@ class SmilerRenderer(context: EntityRendererProvider.Context) : EntityRenderer<S
         if (PortalRendering.isRendering()) entity.portalFrame = Vanish.frame
         val time = entity.tickCount + partialTick
         val phase = entity.id * PHASE_SPREAD
+        Lunge.view(entity, partialTick)?.let { return lurk(entity, it, time, phase, partialTick, poseStack, buffers) }
         poseStack.pushPose()
         poseStack.translate(0.0, Smiler.FACE_CENTRE + BOB * Mth.sin(time * BOB_SPEED + phase), 0.0)
         poseStack.mulPose(Axis.YP.rotationDegrees(SWAY * Mth.sin(time * SWAY_SPEED + phase) - Mth.rotLerp(partialTick, entity.yRotO, entity.yRot)))
@@ -37,6 +38,17 @@ class SmilerRenderer(context: EntityRendererProvider.Context) : EntityRenderer<S
         val u = frame(entity) * FRAME_U
         quad(buffers.getBuffer(FACE), poseStack.last(), u, GLOW)
         quad(buffers.getBuffer(FACE_DEPTH), poseStack.last(), u, DEPTH_CUTOFF)
+        poseStack.popPose()
+    }
+
+    private fun lurk(entity: Smiler, view: Lunge.View, time: Float, phase: Float, partialTick: Float, poseStack: PoseStack, buffers: MultiBufferSource) {
+        if (view.dissolve >= 1f) return
+        val offset = view.centre.subtract(entity.getPosition(partialTick))
+        poseStack.pushPose()
+        poseStack.translate(offset.x, offset.y, offset.z)
+        poseStack.mulPose(entityRenderDispatcher.cameraOrientation())
+        poseStack.mulPose(Axis.ZP.rotationDegrees(TILT * Mth.sin(time * TILT_SPEED + phase * 1.7f)))
+        Embers.draw(poseStack.last(), buffers, FACE, ASH, TEXTURE, HALF, view.dissolve, view.near, entity.id)
         poseStack.popPose()
     }
 
@@ -104,6 +116,8 @@ class SmilerRenderer(context: EntityRendererProvider.Context) : EntityRenderer<S
                 .setTexturingState(RenderStateShard.TexturingStateShard("substratum_smiler_fog", ::pushFog, ::restoreFog))
                 .createCompositeState(false),
         )
+
+        val ASH: RenderType = RenderType.entityTranslucent(TEXTURE)
 
         val FACE_DEPTH: RenderType = RenderType.create(
             "substratum_smiler_face_depth",

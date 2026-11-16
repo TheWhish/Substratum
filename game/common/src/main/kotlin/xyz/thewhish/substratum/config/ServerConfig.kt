@@ -15,12 +15,16 @@ object ServerConfig {
         # false keeps Level 0 calm: nothing new happens, what has already begun ends as usual
         enabled = true
         # seconds of silence between waves of happenings
-        pause_min_seconds = 120
-        pause_max_seconds = 480
+        pause_min_seconds = 90
+        pause_max_seconds = 360
         # how often the smiler comes compared to the default, 0 turns it off
         smiler_frequency = 1.0
         # pressure from which the smiler can come: 0 up to 5 minutes in Level 0, then grows to 1 at 10 minutes
         smiler_pressure = 0.15
+        # how often the smiler lies in wait around a tight corner and lunges at whoever turns it first, 0 turns it off
+        ambush_frequency = 1.0
+        # pressure from which it can lie in wait
+        ambush_pressure = 0.35
         # blocks in a straight line between the smiler and the place where the player first sees it;
         # its face shines through the darkness up to 72 blocks and fades out by 80
         smiler_min_sight_distance = 64
@@ -32,7 +36,7 @@ object ServerConfig {
 
     data class RealitySettings(
         val enabled: Boolean = true,
-        val pause: IntRange = 120 * SECOND..480 * SECOND,
+        val pause: IntRange = 90 * SECOND..360 * SECOND,
         val paces: Map<Manifestation, Pace> = Manifestation.entries.associateWith { Pace(1.0, it.pressure) },
         val smilerDistance: IntRange = 64..72,
     ) {
