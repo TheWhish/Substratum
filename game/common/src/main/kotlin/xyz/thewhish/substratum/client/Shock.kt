@@ -85,6 +85,7 @@ object Shock {
     private var lunge = Float.NaN
     private var impact = Float.NaN
     private var owner = false
+    private var lethal = false
     private var away = Vec3.ZERO
     private var side = 1f
     private var pushed = false
@@ -113,7 +114,7 @@ object Shock {
         fun end() = stop()
     }
 
-    fun begin(victim: Int, lunge: Float, from: Vec3, owner: Boolean) {
+    fun begin(victim: Int, lunge: Float, from: Vec3, owner: Boolean, lethal: Boolean) {
         val minecraft = Minecraft.getInstance()
         val player = minecraft.player ?: return
         stopSounds()
@@ -121,6 +122,7 @@ object Shock {
         this.lunge = lunge
         impact = Float.NaN
         this.owner = owner
+        this.lethal = lethal
         val body = minecraft.cameraEntity ?: player
         away = Vec3(body.x - from.x, 0.0, body.z - from.z).let { if (it.lengthSqr() < 1.0E-6) Vec3.ZERO else it.normalize() }
         val look = body.lookAngle
@@ -165,10 +167,10 @@ object Shock {
         Muffle.apply(minecraft, deafness(t), ::spared)
         if (t < 0f) return
         push(minecraft)
-        if (t >= BREATH_FROM && breath == null) breath = Fading(ModSounds.SHOCK_BREATH.get()) { if (active(minecraft)) BREATH else -1f }.also(::start)
+        if (!lethal && t >= BREATH_FROM && breath == null) breath = Fading(ModSounds.SHOCK_BREATH.get()) { if (active(minecraft)) BREATH else -1f }.also(::start)
         if (ringing == null) ringing = Fading(ModSounds.SHOCK_RINGING.get()) { if (active(minecraft)) ring(time(0f)) else -1f }.also(::start)
         val beat = floor(phase(t + BEAT_LEAD)).toInt()
-        if (t >= FIRST_BEAT && beat > beats) {
+        if (!lethal && t >= FIRST_BEAT && beat > beats) {
             val loud = minOf(1f, HEART_GAIN * maxOf(shock(t).pow(0.8f), early(t)))
             if (loud > QUIET_HEART) play(SoundEvents.WARDEN_HEARTBEAT, SoundSource.PLAYERS, loud)
         }
@@ -295,7 +297,7 @@ object Shock {
     private fun phase(t: Float): Float = (REST_BPM * t + RACE_BPM * RACE_FADE * (1f - exp(-t / RACE_FADE))) / 1200f
 
     private fun pulse(t: Float): Float {
-        if (t < FIRST_BEAT) return 0f
+        if (lethal || t < FIRST_BEAT) return 0f
         val f = phase(t) % 1f
         return smoothstep(FIRST_BEAT, FIRST_BEAT + BEAT_EASE, t) * (beat(f) + SECOND_WEIGHT * beat(f - SECOND_BEAT))
     }

@@ -12,6 +12,7 @@ fun main(args: Array<String>) {
         checkCellConnectivity(layout, seed)
         checkNoSealedPockets(layout, seed)
         checkFooting(layout, seed)
+        checkTrim(layout, seed)
         checkCorridorDrops(layout, seed, tally)
         checkNoSeamGrid(layout, seed)
         checkShape(layout, seed, tally)
@@ -657,3 +658,34 @@ private fun isSquarePillar(layout: MazeLayout, x: Int, z: Int): Boolean {
     }
     return true
 }
+
+private fun checkTrim(layout: MazeLayout, seed: Long) {
+    val steps = listOf(0 to -1, 1 to 0, 0 to 1, -1 to 0)
+    for (floor in listOf(true, false)) {
+        val row = { x: Int, z: Int -> if (floor) FLOOR_ROW else MazeLayout.ceilingOf(layout.columnAt(x, z)) - 1 }
+        val open = { x: Int, z: Int -> layout.columnAt(x, z) and MazeLayout.SOLID == 0 }
+        val blocked = { x: Int, z: Int, y: Int -> !open(x, z) || MazeLayout.ceilingOf(layout.columnAt(x, z)) <= y }
+        val covered = HashMap<Pair<Int, Int>, Int>()
+        for (x in -200 until 200) for (z in -200 until 200) {
+            if (!open(x, z)) continue
+            val y = row(x, z)
+            val mask = layout.trimAt(x, z, y)
+            for ((side, step) in steps.withIndex()) {
+                check((mask shr side and 1 == 1) == blocked(x + step.first, z + step.second, y)) { "seed $seed: trim at $x $y $z misses the face on side $side" }
+                if (mask shr (4 + side) and 1 == 0) continue
+                val turn = steps[(side + 3) % 4]
+                covered.merge(2 * (x + step.first) + 1 - step.first + turn.first to 2 * (z + step.second) + 1 - step.second + turn.second, 1, Int::plus)
+            }
+        }
+        for (x in -190 until 190) for (z in -190 until 190) {
+            if (open(x, z) || !floor) continue
+            for (dx in listOf(-1, 1)) for (dz in listOf(-1, 1)) {
+                if (!open(x + dx, z) || !open(x, z + dz) || !open(x + dx, z + dz)) continue
+                val count = covered[2 * x + 1 + dx to 2 * z + 1 + dz] ?: 0
+                check(count == 1) { "seed $seed: the outer wall corner at $x $z ($dx $dz) is capped $count times" }
+            }
+        }
+    }
+}
+
+private const val FLOOR_ROW = 2

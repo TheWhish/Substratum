@@ -51,9 +51,7 @@ object Director {
             if (!tension.due(now)) continue
             val offer = tension.pick(now, offers(player, layout, settings)) ?: continue
             val payers = perform(offer.kind, player, settings)
-            if (payers.isEmpty()) {
-                if (offer.kind != Manifestation.AMBUSH) tension.miss(now)
-            } else payers.forEach { tensions[it.uuid]?.spend(now, offer) }
+            if (payers.isEmpty()) tension.miss(now) else payers.forEach { tensions[it.uuid]?.spend(now, offer) }
             return
         }
     }
@@ -68,7 +66,6 @@ object Director {
                     val dark = layout.columnAt(player.blockX, player.blockZ) and MazeLayout.DARK_ZONE != 0
                     Tension.Offer(kind, kind.cost * (if (dark) DARK else 1.0) / pace.frequency, pace.frequency, kind.big) { SmilerDirector.ready(player) }
                 }
-                Manifestation.AMBUSH -> Tension.Offer(kind, kind.cost / pace.frequency, pace.frequency, kind.big) { SmilerDirector.ambushReady(player) }
             }
         }
     }
@@ -78,7 +75,6 @@ object Director {
             val visit = SmilerDirector.visit(player, settings.pace(kind).pressure)
             if (visit == null) emptyList() else near(player)
         }
-        Manifestation.AMBUSH -> if (SmilerDirector.ambush(player) != null) near(player) else emptyList()
     }
 
     private fun near(player: ServerPlayer): List<ServerPlayer> =

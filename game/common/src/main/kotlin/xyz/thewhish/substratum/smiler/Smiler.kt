@@ -34,20 +34,20 @@ class Smiler(type: EntityType<Smiler>, level: Level) : Entity(type, level) {
 
     fun leaving(): Boolean = entityData.get(LEAVING)
 
-    fun lurk(hold: Int, fake: Boolean) {
+    fun lurk(hold: Int) {
         require(hold > 0) { "a lurking smiler needs a hold, got $hold" }
         entityData.set(HOLD, hold)
-        entityData.set(FAKE, fake)
     }
 
     fun lurking(): Boolean = entityData.get(HOLD) > 0
 
     fun hold(): Int = entityData.get(HOLD)
 
-    fun fake(): Boolean = entityData.get(FAKE)
+    fun lethal(): Boolean = entityData.get(LETHAL)
 
-    fun spring(victim: Int, eye: Vec3) {
+    fun spring(victim: Int, eye: Vec3, lethal: Boolean) {
         entityData.set(REVEAL, eye.toVector3f())
+        entityData.set(LETHAL, lethal)
         entityData.set(VICTIM, victim)
     }
 
@@ -77,7 +77,7 @@ class Smiler(type: EntityType<Smiler>, level: Level) : Entity(type, level) {
         builder.define(GLITCH_UNTIL, 0L)
         builder.define(LEAVING, false)
         builder.define(HOLD, 0)
-        builder.define(FAKE, false)
+        builder.define(LETHAL, false)
         builder.define(VICTIM, NO_VICTIM)
         builder.define(REVEAL, Vector3f())
         builder.define(FIZZLED, false)
@@ -120,7 +120,7 @@ class Smiler(type: EntityType<Smiler>, level: Level) : Entity(type, level) {
             SynchedEntityData.defineId(Smiler::class.java, EntityDataSerializers.BOOLEAN)
         private val HOLD: EntityDataAccessor<Int> =
             SynchedEntityData.defineId(Smiler::class.java, EntityDataSerializers.INT)
-        private val FAKE: EntityDataAccessor<Boolean> =
+        private val LETHAL: EntityDataAccessor<Boolean> =
             SynchedEntityData.defineId(Smiler::class.java, EntityDataSerializers.BOOLEAN)
         private val VICTIM: EntityDataAccessor<Int> =
             SynchedEntityData.defineId(Smiler::class.java, EntityDataSerializers.INT)

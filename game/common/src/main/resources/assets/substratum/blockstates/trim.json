@@ -1,0 +1,164 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "ceiling": "false",
+        "north": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_floor",
+        "y": 0
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "north_turn": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_floor_turn",
+        "y": 0
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "east": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_floor",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "east_turn": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_floor_turn",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "south": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_floor",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "south_turn": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_floor_turn",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "west": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_floor",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "west_turn": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_floor_turn",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "ceiling": "true",
+        "north": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_ceiling",
+        "y": 0
+      }
+    },
+    {
+      "when": {
+        "ceiling": "true",
+        "north_turn": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_ceiling_turn",
+        "y": 0
+      }
+    },
+    {
+      "when": {
+        "ceiling": "true",
+        "east": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_ceiling",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "ceiling": "true",
+        "east_turn": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_ceiling_turn",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "ceiling": "true",
+        "south": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_ceiling",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "ceiling": "true",
+        "south_turn": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_ceiling_turn",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "ceiling": "true",
+        "west": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_ceiling",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "ceiling": "true",
+        "west_turn": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_ceiling_turn",
+        "y": 270
+      }
+    }
+  ]
+}

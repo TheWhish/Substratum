@@ -1,0 +1,59 @@
+{
+  "textures": {
+    "particle": "substratum:block/trim",
+    "trim": "substratum:block/trim"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        3,
+        0.5
+      ],
+      "shade": false,
+      "faces": {
+        "south": {
+          "uv": [
+            0,
+            0,
+            16,
+            3
+          ],
+          "texture": "#trim"
+        },
+        "up": {
+          "uv": [
+            0,
+            3,
+            16,
+            3.5
+          ],
+          "texture": "#trim"
+        },
+        "west": {
+          "uv": [
+            0,
+            0,
+            0.5,
+            3
+          ],
+          "texture": "#trim"
+        },
+        "east": {
+          "uv": [
+            0,
+            0,
+            0.5,
+            3
+          ],
+          "texture": "#trim"
+        }
+      }
+    }
+  ]
+}

@@ -51,6 +51,7 @@ const int BEAM_MARCH = 104;
 const float BEAM_HAZE = 0.015;
 const float BEAM_FORWARD = 0.2;
 const float BEAM_FAINT = 0.001;
+const float BEAM_RELIEF = 4.0;
 const int CAPSULES = 8;
 const float PANEL_SIZE = 0.7;
 const float BULB_SIZE = 0.2;
@@ -181,6 +182,21 @@ float beamHaze(vec3 direction, float span) {
         total += source.w * aim.w * sum * hop;
     }
     return total * BEAM_HAZE;
+}
+
+float beamLight(vec3 point) {
+    float total = 0.0;
+    for (int i = 0; i < BEAMS; i++) {
+        if (i >= BeamCount) break;
+        vec4 source = Beams[i * 2];
+        vec3 ray = point - source.xyz;
+        float d2 = dot(ray, ray);
+        if (d2 < 1e-4 || d2 >= BeamReach.y * BeamReach.y) continue;
+        float d = sqrt(d2);
+        float cone = smoothstep(BeamCone.y, BeamCone.x, dot(ray / d, Beams[i * 2 + 1].xyz));
+        total += source.w * cone * cone / (1.0 + d2 / (BeamCone.z * BeamCone.z)) * (1.0 - smoothstep(BeamReach.x, BeamReach.y, d));
+    }
+    return total;
 }
 
 float occluded(vec3 from, vec3 light, float size, int mask) {
@@ -319,6 +335,9 @@ void main() {
     glow += beamHaze(direction, span);
     float fog = surface ? smoothstep(FogStart, FogEnd, distance) : 1.0;
     float factor = emission > 0.0 ? 1.0 : clamp(1.0 + Gain * (direct - Shade * smoothstep(0.0, 0.02, direct)), 0.75, 1.5);
-    if (surface && emission <= 0.0) factor *= occlusion(point, normal) * (1.0 - min(hug, CAPSULE_HUG));
+    if (surface && emission <= 0.0) {
+        float relief = clamp(beamLight(point) * BEAM_RELIEF, 0.0, 1.0);
+        factor *= mix(occlusion(point, normal) * (1.0 - min(hug, CAPSULE_HUG)), 1.0, relief);
+    }
     fragColor = vec4(mix(factor, 1.0, fog), glow, emission * (1.0 - fog), 1.0);
 }

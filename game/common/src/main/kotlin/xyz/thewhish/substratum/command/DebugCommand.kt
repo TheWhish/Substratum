@@ -23,12 +23,7 @@ object DebugCommand {
         }
         return Commands.literal("debug")
             .then(visit)
-            .then(
-                Commands.literal("ambush")
-                    .executes { ambush(it, null) }
-                    .then(Commands.literal("real").executes { ambush(it, false) })
-                    .then(Commands.literal("fake").executes { ambush(it, true) })
-            )
+            .then(Commands.literal("ambush").executes(::ambush))
             .then(Commands.literal("clear").executes(::clear))
             .then(
                 Commands.literal("gaze")
@@ -47,10 +42,10 @@ object DebugCommand {
         return done(context, "A smiler is coming (${approach?.name?.lowercase() ?: "any approach"})")
     }
 
-    private fun ambush(context: CommandContext<CommandSourceStack>, fake: Boolean?): Int {
+    private fun ambush(context: CommandContext<CommandSourceStack>): Int {
         val player = context.source.playerOrException
         SmilerDirector.disarm()
-        val lair = SmilerDirector.ambush(player, fake) ?: return fail(context, "No tight corner ahead: look down a corridor that turns within 14 blocks")
+        val lair = SmilerDirector.ambush(player) ?: return fail(context, "No corner ahead: walk or look down a corridor that ends in a turn within 10 blocks")
         val stand = lair.seenFrom
         val yaw = Mth.wrapDegrees(Mth.atan2(lair.at.z - stand.z - 0.5, lair.at.x - stand.x - 0.5).toFloat() * Mth.RAD_TO_DEG - 90f)
         val teleport = "/tp @s ${stand.x + 0.5} ${player.y} ${stand.z + 0.5} $yaw 0"

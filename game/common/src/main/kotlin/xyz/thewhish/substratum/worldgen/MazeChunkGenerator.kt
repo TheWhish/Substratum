@@ -167,9 +167,14 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
         val tile = if (ceilingClean) Palette.ceilingTileClean else Palette.ceilingTile
         if (!solid) {
             if (y == FLOOR_Y + 1 && column and MazeLayout.PIT_ROOM == 0 && stashed(layout, x, z, column)) {
-                return if (layout.flashlightAt(x, z)) Palette.flashlight else Palette.almondWater
+                val stash = if (layout.flashlightAt(x, z)) Palette.flashlight else Palette.almondWater
+                return ModBlocks.trim(stash, false, layout.trimAt(x, z, y))
             }
-            if (y < ceiling) return Palette.air
+            if (y < ceiling) {
+                val floor = y == FLOOR_Y + 1 && column and MazeLayout.PIT == 0
+                if (!floor && y != ceiling - 1) return Palette.air
+                return Palette.trim[if (floor) 0 else 1][layout.trimAt(x, z, y)]
+            }
             if (y == ceiling) {
                 if (column and MazeLayout.LAMP != 0) {
                     val dark = column and MazeLayout.DARK_ZONE != 0
@@ -207,6 +212,9 @@ class MazeChunkGenerator(val biome: Holder<Biome>) : ChunkGenerator(FixedBiomeSo
 
     private object Palette {
         val air: BlockState = Blocks.AIR.defaultBlockState()
+        val trim: Array<Array<BlockState>> = Array(2) { ceiling ->
+            Array(256) { if (it == 0) air else ModBlocks.trim(ModBlocks.TRIM.get().defaultBlockState(), ceiling == 1, it) }
+        }
         val almondWater: BlockState = ModBlocks.ALMOND_WATER.get().defaultBlockState()
         val flashlight: BlockState = ModBlocks.FLASHLIGHT.get().defaultBlockState()
         val abyssFloor: BlockState = ModBlocks.ABYSS_FLOOR.get().defaultBlockState()

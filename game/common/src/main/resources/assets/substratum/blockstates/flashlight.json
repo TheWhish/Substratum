@@ -1,66 +1,148 @@
 {
-  "variants": {
-    "": [
-      {
-        "model": "substratum:block/flashlight"
+  "multipart": [
+    {
+      "when": {
+        "ceiling": "false",
+        "north": "true"
       },
-      {
-        "model": "substratum:block/flashlight_1"
+      "apply": {
+        "model": "substratum:block/trim_floor",
+        "y": 0
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "north_turn": "true"
       },
-      {
-        "model": "substratum:block/flashlight_2"
+      "apply": {
+        "model": "substratum:block/trim_floor_turn",
+        "y": 0
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "east": "true"
       },
-      {
-        "model": "substratum:block/flashlight_3"
-      },
-      {
-        "model": "substratum:block/flashlight",
+      "apply": {
+        "model": "substratum:block/trim_floor",
         "y": 90
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "east_turn": "true"
       },
-      {
-        "model": "substratum:block/flashlight_1",
+      "apply": {
+        "model": "substratum:block/trim_floor_turn",
         "y": 90
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "south": "true"
       },
-      {
-        "model": "substratum:block/flashlight_2",
-        "y": 90
-      },
-      {
-        "model": "substratum:block/flashlight_3",
-        "y": 90
-      },
-      {
-        "model": "substratum:block/flashlight",
+      "apply": {
+        "model": "substratum:block/trim_floor",
         "y": 180
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "south_turn": "true"
       },
-      {
-        "model": "substratum:block/flashlight_1",
+      "apply": {
+        "model": "substratum:block/trim_floor_turn",
         "y": 180
+      }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "west": "true"
       },
-      {
-        "model": "substratum:block/flashlight_2",
-        "y": 180
-      },
-      {
-        "model": "substratum:block/flashlight_3",
-        "y": 180
-      },
-      {
-        "model": "substratum:block/flashlight",
-        "y": 270
-      },
-      {
-        "model": "substratum:block/flashlight_1",
-        "y": 270
-      },
-      {
-        "model": "substratum:block/flashlight_2",
-        "y": 270
-      },
-      {
-        "model": "substratum:block/flashlight_3",
+      "apply": {
+        "model": "substratum:block/trim_floor",
         "y": 270
       }
-    ]
-  }
+    },
+    {
+      "when": {
+        "ceiling": "false",
+        "west_turn": "true"
+      },
+      "apply": {
+        "model": "substratum:block/trim_floor_turn",
+        "y": 270
+      }
+    },
+    {
+      "apply": [
+        {
+          "model": "substratum:block/flashlight"
+        },
+        {
+          "model": "substratum:block/flashlight_1"
+        },
+        {
+          "model": "substratum:block/flashlight_2"
+        },
+        {
+          "model": "substratum:block/flashlight_3"
+        },
+        {
+          "model": "substratum:block/flashlight",
+          "y": 90
+        },
+        {
+          "model": "substratum:block/flashlight_1",
+          "y": 90
+        },
+        {
+          "model": "substratum:block/flashlight_2",
+          "y": 90
+        },
+        {
+          "model": "substratum:block/flashlight_3",
+          "y": 90
+        },
+        {
+          "model": "substratum:block/flashlight",
+          "y": 180
+        },
+        {
+          "model": "substratum:block/flashlight_1",
+          "y": 180
+        },
+        {
+          "model": "substratum:block/flashlight_2",
+          "y": 180
+        },
+        {
+          "model": "substratum:block/flashlight_3",
+          "y": 180
+        },
+        {
+          "model": "substratum:block/flashlight",
+          "y": 270
+        },
+        {
+          "model": "substratum:block/flashlight_1",
+          "y": 270
+        },
+        {
+          "model": "substratum:block/flashlight_2",
+          "y": 270
+        },
+        {
+          "model": "substratum:block/flashlight_3",
+          "y": 270
+        }
+      ]
+    }
+  ]
 }

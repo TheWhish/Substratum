@@ -29,7 +29,10 @@ object SmilerDirector {
     private const val WITNESSES = 24.0
     private val VICTIM_CALM = 5 * 60 * 20L..7 * 60 * 20L
     private val WITNESS_CALM = 3 * 60 * 20L..5 * 60 * 20L
-    private const val SHAKEN = 3000
+    private const val AFTER_AMBUSH = 2 * 60 * 20L
+    private const val AFTER_VISIT = 60 * 20L
+    private const val HUNT_EVERY = 4
+    private const val TRUSTED_EYE = 3.0
     private const val STRIDE_FOLLOW = 0.2
 
     private val random = Random.Default
@@ -37,6 +40,7 @@ object SmilerDirector {
     private val last = HashMap<UUID, Approach>()
     private val ambushes = ArrayList<Ambush>()
     private val calm = HashMap<UUID, Long>()
+    private val quiet = HashMap<UUID, Long>()
     private val strides = HashMap<UUID, Stride>()
 
     private class Stride(var at: Vec3) {
@@ -45,7 +49,6 @@ object SmilerDirector {
 
     fun register() {
         TickEvent.SERVER_POST.register(::tick)
-        TickEvent.SERVER_POST.register(::pace)
         PlayerEvent.PLAYER_QUIT.register {
             last.remove(it.uuid)
             strides.remove(it.uuid)
@@ -55,30 +58,46 @@ object SmilerDirector {
             last.clear()
             ambushes.clear()
             calm.clear()
+            quiet.clear()
             strides.clear()
         }
     }
 
     private fun tick(server: MinecraftServer) {
-        if (visits.isEmpty() && ambushes.isEmpty()) return
-        val level = server.getLevel(SubstratumLevels.LEVEL_0) ?: return
-        val layout = (level.chunkSource.generator as? MazeChunkGenerator)?.layout ?: return
-        val stage = Stage(level, layout)
-        visits.values.removeIf { !it.advance(stage, stage.level.getPlayerByUUID(it.victim) as? ServerPlayer) }
-        ambushes.removeIf { !it.advance(stage) }
-    }
-
-    private fun pace(server: MinecraftServer) {
         val level = server.getLevel(SubstratumLevels.LEVEL_0) ?: return
         for (player in level.players()) {
             val stride = strides.getOrPut(player.uuid) { Stride(player.position()) }
             stride.velocity = stride.velocity.lerp(player.position().subtract(stride.at), STRIDE_FOLLOW)
             stride.at = player.position()
         }
+        val hunting = server.tickCount % HUNT_EVERY == 0
+        if (visits.isEmpty() && ambushes.isEmpty() && !hunting) return
+        val layout = (level.chunkSource.generator as? MazeChunkGenerator)?.layout ?: return
+        val stage = Stage(level, layout)
+        visits.values.removeIf { visit ->
+            val over = !visit.advance(stage, level.getPlayerByUUID(visit.victim) as? ServerPlayer)
+            if (over) quiet.merge(visit.victim, stage.now + AFTER_VISIT, ::maxOf)
+            over
+        }
+        ambushes.removeIf { !it.advance(stage) }
+        if (hunting) hunt(stage)
     }
+
+    private fun hunt(stage: Stage) {
+        val pace = ServerConfig.reality.ambush
+        if (!ServerConfig.reality.enabled || pace.frequency <= 0.0) return
+        for (player in stage.players.shuffled(random)) {
+            if (due(stage, player, pace) && lie(stage, player) != null) return
+        }
+    }
+
+    private fun due(stage: Stage, player: ServerPlayer, pace: ServerConfig.Pace): Boolean =
+        Ambush.prey(player) && SanityTracker.pressure(player) >= pace.pressure && stage.now >= (calm[player.uuid] ?: 0L) &&
+            Corners.tight(stage.layout::columnAt, player.blockX, player.blockZ) && ready(player)
 
     fun ready(player: ServerPlayer): Boolean {
         if (player.uuid in visits || visits.size + ambushes.size >= MAX_AT_ONCE) return false
+        if (player.serverLevel().gameTime < (quiet[player.uuid] ?: 0L)) return false
         val reach = ServerConfig.reality.smilerDistance.last.toDouble()
         return player.serverLevel().getEntitiesOfClass(Smiler::class.java, player.boundingBox.inflate(reach)) {
             it.isAlive && it.distanceToSqr(player) < reach * reach
@@ -102,23 +121,16 @@ object SmilerDirector {
         return true
     }
 
-    fun ambushReady(player: ServerPlayer): Boolean {
-        if (!ready(player)) return false
-        val layout = stageOf(player)?.layout ?: return false
-        if (!Corners.tight(layout::columnAt, player.blockX, player.blockZ)) return false
-        val now = player.serverLevel().gameTime
-        return now >= (calm[player.uuid] ?: 0L)
-    }
+    fun ambush(player: ServerPlayer): Corners.Lair? = stageOf(player)?.let { lie(it, player) }
 
-    fun ambush(player: ServerPlayer, fake: Boolean? = null): Corners.Lair? {
-        val stage = stageOf(player) ?: return null
+    private fun lie(stage: Stage, player: ServerPlayer): Corners.Lair? {
         if (abs(player.y - Spots.FLOOR) > FOOTING) return null
         val viewer = stage.gaze.viewer(player.uuid) ?: return null
         val moving = strides[player.uuid]?.velocity ?: Vec3.ZERO
         val lair = Corners.find(stage.gaze, stage.layout, viewer, player.position(), moving, random, stage::fits) ?: return null
         val smiler = ModEntities.SMILER.get().create(stage.level) ?: error("the smiler entity type is disabled")
         smiler.moveTo(lair.at.x, lair.at.y, lair.at.z, 0f, 0f)
-        smiler.lurk(random.nextInt(Ambush.HOLD.first, Ambush.HOLD.last + 1), fake ?: (random.nextDouble() < Ambush.FAKE_ODDS))
+        smiler.lurk(random.nextInt(Ambush.HOLD.first, Ambush.HOLD.last + 1))
         if (!stage.level.addFreshEntity(smiler)) return null
         ambushes.add(Ambush(smiler, stage.now))
         return lair
@@ -128,15 +140,30 @@ object SmilerDirector {
         ambushes.removeIf { ambush -> ambush.armed.also { if (it) ambush.smiler.discard() } }
     }
 
-    fun spotted(player: ServerPlayer, entity: Int, eye: Vec3) {
+    fun spotted(player: ServerPlayer, entity: Int, reported: Vec3) {
         val ambush = ambushes.firstOrNull { it.smiler.id == entity } ?: return
-        val now = player.serverLevel().gameTime
-        val victim = ambush.spot(now, player, eye) ?: return
-        for (witness in victim.serverLevel().players()) {
-            if (witness.distanceToSqr(victim) < WITNESSES * WITNESSES) calm.merge(witness.uuid, now + random.nextLong(WITNESS_CALM.first, WITNESS_CALM.last + 1), ::maxOf)
+        val stage = stageOf(player) ?: return
+        val eye = reported.takeIf { it.distanceToSqr(player.eyePosition) <= TRUSTED_EYE * TRUSTED_EYE } ?: player.eyePosition
+        spring(stage, ambush, player, eye)
+    }
+
+    fun struck(player: ServerPlayer, entity: Int) {
+        ambushes.firstOrNull { it.smiler.id == entity }?.strike(player)
+    }
+
+    private fun spring(stage: Stage, ambush: Ambush, victim: ServerPlayer, eye: Vec3) {
+        if (!ambush.spring(stage.now, victim, eye)) return
+        for (witness in stage.players) {
+            if (witness.distanceToSqr(victim) >= WITNESSES * WITNESSES) continue
+            calm.merge(witness.uuid, stage.now + calmFor(WITNESS_CALM), ::maxOf)
+            quiet.merge(witness.uuid, stage.now + AFTER_AMBUSH, ::maxOf)
         }
-        calm[victim.uuid] = now + random.nextLong(VICTIM_CALM.first, VICTIM_CALM.last + 1)
-        if (!ambush.smiler.fake()) SanityTracker.set(victim, minOf(SanityTracker.ticks(victim) + SHAKEN, SanityTracker.LIMIT - 1))
+        calm[victim.uuid] = stage.now + calmFor(VICTIM_CALM)
+    }
+
+    private fun calmFor(span: LongRange): Long {
+        val frequency = ServerConfig.reality.ambush.frequency
+        return if (frequency <= 0.0) 0L else (random.nextLong(span.first, span.last + 1) / frequency).toLong()
     }
 
     fun lost(player: ServerPlayer, entity: Int) {

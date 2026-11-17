@@ -28,7 +28,7 @@
   "hud.substratum.signal_lost": "SIGNAL LOST",
   "hud.substratum.recording_cut": "RECORDING INTERRUPTED",
   "hud.substratum.feed_hint": "LMB / RMB — NEXT CHANNEL   ·   1–%s — BY NUMBER",
-  "hud.substratum.channel": "CH %s",
+  "hud.substratum.channel": "CAM %s",
   "hud.substratum.level": "LEVEL %s",
   "commands.substratum.sanity.get": "Sanity: %1$s ticks, phase %2$s",
   "commands.substratum.sanity.set": "Sanity set to %1$s ticks, phase %2$s",

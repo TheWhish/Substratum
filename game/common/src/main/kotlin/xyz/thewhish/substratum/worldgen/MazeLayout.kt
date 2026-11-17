@@ -101,6 +101,7 @@ class MazeLayout(val seed: Long) {
         fun plenty(players: Int): Float = 1f + PLENTY_PER_EXTRA_PLAYER * (players.coerceIn(1, PARTY_MAX) - 1)
 
         private const val ANOMALY_PITCH = 4
+        private val TRIM_STEPS = arrayOf(0 to -1, 1 to 0, 0 to 1, -1 to 0)
 
         const val WALL_BASE_Y = 2
 
@@ -625,6 +626,19 @@ class MazeLayout(val seed: Long) {
     }
 
     private fun isSolid(x: Int, z: Int): Boolean = columnAt(x, z) and SOLID != 0
+
+    fun trimAt(x: Int, z: Int, y: Int): Int {
+        fun blocked(nx: Int, nz: Int): Boolean = columnAt(nx, nz).let { it and SOLID != 0 || ceilingOf(it) <= y }
+        var mask = 0
+        for (side in TRIM_STEPS.indices) {
+            val (dx, dz) = TRIM_STEPS[side]
+            if (!blocked(x + dx, z + dz)) continue
+            mask = mask or (1 shl side)
+            val (tx, tz) = TRIM_STEPS[(side + 3) % 4]
+            if (!blocked(x + tx, z + tz) && !blocked(x + dx + tx, z + dz + tz)) mask = mask or (16 shl side)
+        }
+        return mask
+    }
 
     private fun isOpen(x: Int, z: Int): Boolean = columnAt(x, z) and SOLID == 0
 

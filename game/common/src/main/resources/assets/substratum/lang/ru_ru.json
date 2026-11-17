@@ -28,7 +28,7 @@
   "hud.substratum.signal_lost": "СИГНАЛ ПОТЕРЯН",
   "hud.substratum.recording_cut": "ЗАПИСЬ ОБОРВАНА",
   "hud.substratum.feed_hint": "ЛКМ / ПКМ — СОСЕДНИЙ КАНАЛ   ·   1–%s — ПО НОМЕРУ",
-  "hud.substratum.channel": "КАН %s",
+  "hud.substratum.channel": "CAM %s",
   "hud.substratum.level": "УРОВЕНЬ %s",
   "commands.substratum.sanity.get": "Рассудок: %1$s тиков, фаза %2$s",
   "commands.substratum.sanity.set": "Рассудок установлен на %1$s тиков, фаза %2$s",

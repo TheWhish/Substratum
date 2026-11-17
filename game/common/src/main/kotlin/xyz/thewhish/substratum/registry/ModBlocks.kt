@@ -19,6 +19,7 @@ import net.minecraft.world.level.BlockGetter
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.LevelReader
 import net.minecraft.world.level.block.Block
+import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.RenderShape
 import net.minecraft.world.level.block.SoundType
 import net.minecraft.world.level.block.state.BlockBehaviour
@@ -31,6 +32,7 @@ import net.minecraft.world.level.material.MapColor
 import net.minecraft.world.level.material.PushReaction
 import net.minecraft.world.phys.BlockHitResult
 import net.minecraft.world.phys.shapes.CollisionContext
+import net.minecraft.world.phys.shapes.Shapes
 import net.minecraft.world.phys.shapes.VoxelShape
 import xyz.thewhish.substratum.Substratum
 import xyz.thewhish.substratum.client.LampFlicker
@@ -69,6 +71,11 @@ object ModBlocks {
     val LAMP_CONDITION: EnumProperty<LampCondition> = EnumProperty.create("condition", LampCondition::class.java)
 
     val CLEAN: BooleanProperty = BooleanProperty.create("clean")
+
+    private val TRIM_SIDES = listOf("north", "east", "south", "west")
+    private val TRIM_WALLS: List<BooleanProperty> = TRIM_SIDES.map { BooleanProperty.create(it) }
+    private val TRIM_TURNS: List<BooleanProperty> = TRIM_SIDES.map { BooleanProperty.create("${it}_turn") }
+    private val TRIM_CEILING: BooleanProperty = BooleanProperty.create("ceiling")
 
     val DAMP_CARPET: RegistrySupplier<Block> = register("damp_carpet") { CleanableBlock(carpet()) }
 
@@ -142,6 +149,19 @@ object ModBlocks {
         )
     }
 
+    val TRIM: RegistrySupplier<Block> = BLOCKS.register("trim") {
+        TrimBlock(
+            BlockBehaviour.Properties.of()
+                .mapColor(MapColor.TERRACOTTA_WHITE)
+                .instabreak()
+                .noCollission()
+                .noOcclusion()
+                .sound(SoundType.WOOD)
+                .pushReaction(PushReaction.DESTROY)
+                .noLootTable()
+        )
+    }
+
     val ALMOND_WATER: RegistrySupplier<Block> = BLOCKS.register("almond_water") {
         AlmondWaterBlock(
             BlockBehaviour.Properties.of()
@@ -149,7 +169,6 @@ object ModBlocks {
                 .instabreak()
                 .noCollission()
                 .noOcclusion()
-                .offsetType(BlockBehaviour.OffsetType.XZ)
                 .sound(SoundType.GLASS)
                 .pushReaction(PushReaction.DESTROY)
                 .noLootTable()
@@ -163,7 +182,6 @@ object ModBlocks {
                 .instabreak()
                 .noCollission()
                 .noOcclusion()
-                .offsetType(BlockBehaviour.OffsetType.XZ)
                 .sound(SoundType.METAL)
                 .pushReaction(PushReaction.DESTROY)
                 .noLootTable()
@@ -213,6 +231,14 @@ object ModBlocks {
         return SHAFT_FADE.get().defaultBlockState().setValue(SHAFT_FADE_VARIANT, step - 1)
     }
 
+    fun trim(base: BlockState, ceiling: Boolean, mask: Int): BlockState {
+        var state = base.setValue(TRIM_CEILING, ceiling)
+        for (side in TRIM_SIDES.indices) {
+            state = state.setValue(TRIM_WALLS[side], mask and (1 shl side) != 0).setValue(TRIM_TURNS[side], mask and (16 shl side) != 0)
+        }
+        return state
+    }
+
     fun register() {
         BLOCKS.register()
         BLOCK_ITEMS.register()
@@ -222,6 +248,21 @@ object ModBlocks {
         override fun createBlockStateDefinition(builder: StateDefinition.Builder<Block, BlockState>) {
             builder.add(CLEAN)
         }
+    }
+
+    private fun trimmed(builder: StateDefinition.Builder<Block, BlockState>) {
+        builder.add(TRIM_CEILING)
+        TRIM_WALLS.forEach { builder.add(it) }
+        TRIM_TURNS.forEach { builder.add(it) }
+    }
+
+    private fun leftover(state: BlockState): BlockState =
+        if (TRIM_WALLS.any(state::getValue)) TRIM.get().withPropertiesOf(state) else Blocks.AIR.defaultBlockState()
+
+    private class TrimBlock(properties: Properties) : Block(properties) {
+        override fun createBlockStateDefinition(builder: StateDefinition.Builder<Block, BlockState>) = trimmed(builder)
+
+        override fun getShape(state: BlockState, level: BlockGetter, pos: BlockPos, context: CollisionContext): VoxelShape = Shapes.empty()
     }
 
     private class WallAnomalyBlock(properties: Properties) : Block(properties) {
@@ -281,7 +322,7 @@ object ModBlocks {
     private fun pickUp(level: Level, pos: BlockPos, player: Player, item: Item): InteractionResult {
         if (player.inventory.freeSlot < 0) return InteractionResult.FAIL
         if (level.isClientSide) return InteractionResult.SUCCESS
-        level.removeBlock(pos, false)
+        level.setBlock(pos, leftover(level.getBlockState(pos)), Block.UPDATE_ALL)
         BackroomsGuard.resyncRemoteWatchersAfterCrossPortalEdit(level, pos)
         player.inventory.add(ItemStack(item))
         ModSounds.playPickup(level, pos, item)
@@ -289,10 +330,9 @@ object ModBlocks {
     }
 
     private class AlmondWaterBlock(properties: Properties) : Block(properties) {
-        override fun getShape(state: BlockState, level: BlockGetter, pos: BlockPos, context: CollisionContext): VoxelShape {
-            val offset = state.getOffset(level, pos)
-            return BOTTLE_SHAPE.move(offset.x, offset.y, offset.z)
-        }
+        override fun createBlockStateDefinition(builder: StateDefinition.Builder<Block, BlockState>) = trimmed(builder)
+
+        override fun getShape(state: BlockState, level: BlockGetter, pos: BlockPos, context: CollisionContext): VoxelShape = BOTTLE_SHAPE
 
         override fun getCloneItemStack(level: LevelReader, pos: BlockPos, state: BlockState): ItemStack =
             ItemStack(ModItems.ALMOND_WATER.get())
@@ -302,10 +342,9 @@ object ModBlocks {
     }
 
     private class FlashlightBlock(properties: Properties) : Block(properties) {
-        override fun getShape(state: BlockState, level: BlockGetter, pos: BlockPos, context: CollisionContext): VoxelShape {
-            val offset = state.getOffset(level, pos)
-            return FLASHLIGHT_SHAPE.move(offset.x, offset.y, offset.z)
-        }
+        override fun createBlockStateDefinition(builder: StateDefinition.Builder<Block, BlockState>) = trimmed(builder)
+
+        override fun getShape(state: BlockState, level: BlockGetter, pos: BlockPos, context: CollisionContext): VoxelShape = FLASHLIGHT_SHAPE
 
         override fun getCloneItemStack(level: LevelReader, pos: BlockPos, state: BlockState): ItemStack =
             ItemStack(ModItems.FLASHLIGHT.get())

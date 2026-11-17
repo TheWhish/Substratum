@@ -17,7 +17,7 @@ import kotlin.math.floor
 object TerrainLight {
 
     private const val BLOCK = 7
-    private const val BYTES = 48 + (Flashlights.MAX + Capsules.MAX) * 32
+    private const val BYTES = 48 + Flashlights.MAX * 48 + Capsules.MAX * 32
     private const val SHADER = "blocks/block_layer_opaque"
 
     private class Edit(val anchor: String, val replacement: String)
@@ -97,7 +97,10 @@ object TerrainLight {
         data.putFloat(BackroomsLight.floor()).putFloat(BackroomsLight.vision(minecraft, partialTick)).putFloat(0f).putFloat(0f)
         for (beam in Flashlights.beams) {
             data.putFloat((beam.x - chunkX * 16.0).toFloat()).putFloat(beam.y.toFloat()).putFloat((beam.z - chunkZ * 16.0).toFloat()).putFloat(beam.power)
-            data.putFloat(beam.direction.x).putFloat(beam.direction.y).putFloat(beam.direction.z).putFloat(0f)
+            data.putFloat(beam.direction.x).putFloat(beam.direction.y).putFloat(beam.direction.z).putFloat(beam.face.toFloat())
+        }
+        for (beam in Flashlights.beams) {
+            data.putFloat((beam.hitX - chunkX * 16.0).toFloat()).putFloat(beam.hitY.toFloat()).putFloat((beam.hitZ - chunkZ * 16.0).toFloat()).putFloat(beam.bounce)
         }
         Capsules.write(chunkX * 16.0, 0.0, chunkZ * 16.0) { data.putFloat(it) }
         data.flip()
@@ -143,6 +146,7 @@ layout(std140, binding = $BLOCK) uniform SubstratumTerrain {
     vec4 st_Camera;
     vec4 st_Curve;
     vec4 st_Beams[${Flashlights.MAX * 2}];
+    vec4 st_Bounces[${Flashlights.MAX}];
     vec4 st_Capsules[${Capsules.MAX * 2}];
 };
 
@@ -171,6 +175,9 @@ const float ST_BEAM_RANGE = ${f(Flashlights.RANGE)};
 const float ST_BEAM_GAIN = ${f(Flashlights.GAIN)};
 const vec3 ST_BEAM_COLOR = ${v(Flashlights.COLOR)};
 const float ST_BEAM_FAINT = 0.002;
+const float ST_BOUNCE_NEAR = ${f(Flashlights.BOUNCE_NEAR)};
+const float ST_BOUNCE_RANGE = ${f(Flashlights.BOUNCE_RANGE)};
+const vec3 ST_FACES[6] = vec3[6](vec3(0.0, -1.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, -1.0), vec3(0.0, 0.0, 1.0), vec3(-1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0));
 const float ST_LENS_SIZE = 0.08;
 
 $capsule
@@ -242,6 +249,21 @@ vec3 stBeams(vec3 point, vec3 normal) {
         amount *= stVisible(stVolume(source.xyz), stVolume(lit)) * stOccluded(lit, source.xyz);
         sum += amount;
     }
+    for (int i = 0; i < ${Flashlights.MAX}; i++) {
+        if (i >= st_Origin.w) break;
+        vec4 spot = st_Bounces[i];
+        if (spot.w <= 0.0) continue;
+        vec3 face = ST_FACES[int(st_Beams[i * 2 + 1].w)];
+        vec3 toSpot = spot.xyz + face * 0.05 - point;
+        float d2 = dot(toSpot, toSpot);
+        if (d2 >= ST_BOUNCE_RANGE * ST_BOUNCE_RANGE || d2 < 1e-6) continue;
+        vec3 l = toSpot * inversesqrt(d2);
+        float facing = max(dot(normal, l), 0.0) * max(-dot(face, l), 0.0);
+        if (facing <= 0.0) continue;
+        float amount = spot.w * facing / (1.0 + d2 / (ST_BOUNCE_NEAR * ST_BOUNCE_NEAR)) * (1.0 - smoothstep(ST_BOUNCE_RANGE * 0.5, ST_BOUNCE_RANGE, sqrt(d2)));
+        if (amount < ST_BEAM_FAINT) continue;
+        sum += amount * stVisible(stVolume(spot.xyz + face * 0.5), stVolume(point + normal * 0.05));
+    }
     return sum * ST_BEAM_COLOR;
 }
 
@@ -279,8 +301,8 @@ vec4 substratumLight(vec3 position, vec4 color, vec4 fallback) {
     normal = area > 0.0 ? normal * inversesqrt(area) : vec3(0.0);
     if (dot(normal, position) > 0.0) normal = -normal;
     vec3 point = st_Camera.xyz + position;
-    vec3 light = stField(point, normal, fallback.rgb) + stBeams(point, normal);
-    return vec4(color.rgb * min(light, vec3(1.0)), color.a * fallback.a);
+    vec3 lit = color.rgb * stField(point, normal, fallback.rgb) + stBeams(point, normal);
+    return vec4(min(lit, vec3(1.0)), color.a * fallback.a);
 }
 #else
 vec4 substratumLight(vec3 position, vec4 color, vec4 fallback) {

@@ -25,7 +25,10 @@ object Flashlights {
     const val NEAR = 9f
     const val RANGE = 52f
     const val FADE_FROM = 32f
-    const val GAIN = 1.6f
+    const val GAIN = 1.3f
+    const val BOUNCE_NEAR = 2.5f
+    const val BOUNCE_RANGE = 8f
+    private const val ALBEDO = 0.3f
     val COS_INNER = cos(Math.toRadians(11.0)).toFloat()
     val COS_OUTER = cos(Math.toRadians(32.0)).toFloat()
     val COLOR = floatArrayOf(1.0f, 0.8f, 0.58f)
@@ -55,6 +58,11 @@ object Flashlights {
         var power = 0f
         var haze = 1f
         var owner = 0
+        var face = 0
+        var hitX = 0.0
+        var hitY = 0.0
+        var hitZ = 0.0
+        var bounce = 0f
     }
 
     val beams = Array(MAX) { Beam() }
@@ -145,6 +153,22 @@ object Flashlights {
         beam.power = FlashlightItem.power(player.getItemInHand(hand))
         beam.haze = if (own) OWN_HAZE else 1f
         beam.owner = player.id
+        bounce(beam, player)
+    }
+
+    private fun bounce(beam: Beam, player: Player) {
+        val from = Vec3(beam.x, beam.y, beam.z)
+        val to = from.add(beam.direction.x * RANGE.toDouble(), beam.direction.y * RANGE.toDouble(), beam.direction.z * RANGE.toDouble())
+        val hit = player.level().clip(ClipContext(from, to, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player))
+        beam.bounce = 0f
+        if (hit.type != HitResult.Type.BLOCK) return
+        val normal = hit.direction.normal
+        beam.face = hit.direction.ordinal
+        beam.hitX = hit.location.x
+        beam.hitY = hit.location.y
+        beam.hitZ = hit.location.z
+        val facing = -(beam.direction.x * normal.x + beam.direction.y * normal.y + beam.direction.z * normal.z)
+        beam.bounce = ALBEDO * reach(beam, hit.location) * facing.coerceAtLeast(0f)
     }
 
     private fun held(eye: Vec3, rotation: Quaternionf, side: Double): Vec3 {

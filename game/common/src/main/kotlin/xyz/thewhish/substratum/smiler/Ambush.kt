@@ -2,64 +2,70 @@ package xyz.thewhish.substratum.smiler
 
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.phys.Vec3
+import xyz.thewhish.substratum.level.Run
+import xyz.thewhish.substratum.sanity.SanityTracker
 
 class Ambush(val smiler: Smiler, private val armedAt: Long) {
 
     private var endsAt = NEVER
-    private var noticedSince = NEVER
+    private var victim: ServerPlayer? = null
+    private var strikeAt = NEVER
+    private var closest = Double.MAX_VALUE
 
     val armed: Boolean get() = endsAt == NEVER
 
     fun advance(stage: Stage): Boolean {
         if (smiler.isRemoved) return false
         if (!armed) {
+            victim?.takeIf { stage.now >= strikeAt }?.let(::strike)
             if (stage.now < endsAt) return true
             smiler.discard()
             return false
         }
         val feet = smiler.position()
-        if (stage.now - armedAt > PATIENCE) {
-            if (stage.hidden(feet, emptySet())) {
-                smiler.discard()
-                return false
-            }
-            fizzle(stage.now)
-            return true
+        val nearest = stage.players.filter(::prey).minOfOrNull { it.position().distanceTo(feet) } ?: Double.MAX_VALUE
+        closest = minOf(closest, nearest)
+        if (nearest > closest + PASSED && !stage.noticed(feet)) {
+            smiler.discard()
+            return false
         }
-        noticedSince = if (stage.noticed(feet)) minOf(noticedSince, stage.now) else NEVER
-        if (stage.now - noticedSince > UNREPORTED) fizzle(stage.now)
+        if (stage.now - armedAt <= PATIENCE) return true
+        if (stage.hidden(feet, emptySet())) {
+            smiler.discard()
+            return false
+        }
+        smiler.fizzle()
+        endsAt = stage.now + DISSOLVE + LINGER
         return true
     }
 
-    fun spot(now: Long, player: ServerPlayer, eye: Vec3): ServerPlayer? {
-        if (!armed || !player.isAlive || player.isSpectator || player.level() !== smiler.level()) return null
-        if (eye.distanceToSqr(player.eyePosition) > TRUSTED_EYE * TRUSTED_EYE) return null
-        val face = smiler.position().add(0.0, Smiler.FACE_CENTRE, 0.0)
-        if (eye.distanceTo(face) > Corners.REVEAL_FAR + Smiler.FACE_HALF + LATE) {
-            fizzle(now)
-            return null
-        }
-        smiler.spring(player.id, eye)
-        endsAt = now + smiler.hold() + (if (smiler.fake()) STARE else LUNGE) + DISSOLVE + LINGER
-        return player
+    fun spring(now: Long, player: ServerPlayer, eye: Vec3): Boolean {
+        if (!armed || !prey(player) || player.level() !== smiler.level()) return false
+        smiler.spring(player.id, eye, SanityTracker.LIMIT - SanityTracker.ticks(player) <= SHAKEN + LAST_BREATH)
+        victim = player
+        strikeAt = now + smiler.hold() + LUNGE + LATE_STRIKE
+        endsAt = now + smiler.hold() + LUNGE + DISSOLVE + LINGER
+        return true
     }
 
-    private fun fizzle(now: Long) {
-        smiler.fizzle()
-        endsAt = now + DISSOLVE + LINGER
+    fun strike(player: ServerPlayer) {
+        if (player !== victim) return
+        victim = null
+        if (prey(player)) SanityTracker.set(player, if (smiler.lethal()) SanityTracker.LIMIT else SanityTracker.ticks(player) + SHAKEN)
     }
 
     companion object {
         const val LUNGE = 30
-        const val STARE = 26
         const val DISSOLVE = 12
-        val HOLD = 4..7
-        const val FAKE_ODDS = 0.25
+        val HOLD = 2..2
+        private const val SHAKEN = 5000
+        private const val LAST_BREATH = 200
         private const val NEVER = Long.MAX_VALUE
         private const val PATIENCE = 25 * 20L
-        private const val UNREPORTED = 30L
+        private const val PASSED = 3.0
+        private const val LATE_STRIKE = 20L
         private const val LINGER = 40L
-        private const val TRUSTED_EYE = 3.0
-        private const val LATE = 1.5
+
+        fun prey(player: ServerPlayer): Boolean = player.isAlive && !player.isSpectator && !Run.falling(player)
     }
 }

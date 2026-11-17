@@ -43,8 +43,8 @@ object SubstratumClient {
             reportViewportIfChanged()
             turnSmilers(level)
             Drinking.tick(level)
-            Collapse.tick(level)
         }
+        ClientTickEvent.CLIENT_POST.register { minecraft -> if (!minecraft.isPaused) minecraft.level?.let(Collapse::tick) }
         ClientTickEvent.CLIENT_POST.register(::preparePortalWorlds)
         ClientTickEvent.CLIENT_POST.register(LampHum::tick)
         LightField.init()

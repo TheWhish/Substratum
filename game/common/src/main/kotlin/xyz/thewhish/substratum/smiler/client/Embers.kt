@@ -50,13 +50,20 @@ object Embers {
     )
 
     private var texels: List<Texel>? = null
+    private var marks: List<FloatArray>? = null
     private var texel = 0f
     private var spanU = 0f
     private var spanV = 0f
 
     fun reset() {
         texels = null
+        marks = null
     }
+
+    fun marks(): List<FloatArray> = marks ?: texels?.filter { it.glows }?.let { lit ->
+        val stride = maxOf(1, lit.size / MARKS)
+        lit.filterIndexed { i, _ -> i % stride == 0 }.map { floatArrayOf(it.x, it.y) }
+    }?.also { marks = it } ?: emptyList()
 
     fun draw(pose: PoseStack.Pose, buffers: MultiBufferSource, glow: RenderType, ash: RenderType, texture: ResourceLocation, half: Float, progress: Float, near: Boolean, seed: Int) {
         val all = texels ?: load(texture, half) ?: return
@@ -165,5 +172,6 @@ object Embers {
     }
 
     private const val DARK_TEXEL = 90
+    private const val MARKS = 64
     private const val SQRT2 = 1.4142135f
 }

@@ -38,6 +38,7 @@ object ServerConfig {
         val enabled: Boolean = true,
         val pause: IntRange = 90 * SECOND..360 * SECOND,
         val paces: Map<Manifestation, Pace> = Manifestation.entries.associateWith { Pace(1.0, it.pressure) },
+        val ambush: Pace = Pace(1.0, 0.35),
         val smilerDistance: IntRange = 64..72,
     ) {
         fun pace(kind: Manifestation): Pace = paces.getValue(kind)
@@ -72,6 +73,10 @@ object ServerConfig {
                     file.double("reality.${kind.key}_pressure", d.pace(kind).pressure, 0.0..1.0),
                 )
             },
+            ambush = Pace(
+                file.double("reality.ambush_frequency", d.ambush.frequency, 0.0..10.0),
+                file.double("reality.ambush_pressure", d.ambush.pressure, 0.0..1.0),
+            ),
             smilerDistance = span(
                 file.int("reality.smiler_min_sight_distance", d.smilerDistance.first, blocks),
                 file.int("reality.smiler_max_sight_distance", d.smilerDistance.last, blocks),
